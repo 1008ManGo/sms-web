@@ -54,6 +54,20 @@ public class SmsController : ControllerBase
             }
 
             var submitService = _smppClientManager.GetSubmitService();
+            var longMessageProcessor = new SmppClient.Services.LongMessageProcessor();
+            var splitResult = longMessageProcessor.Split(request.Content, null);
+            var segmentCount = splitResult.Segments.Count;
+
+            var cost = await _billingService.CalculateCostAsync(userId, request.Mobile, segmentCount);
+            var balance = await _billingService.GetBalanceAsync(userId);
+
+            if (balance < cost)
+            {
+                _logger.LogWarning("Insufficient balance for user {UserId}. Balance: {Balance}, Cost: {Cost}", 
+                    userId, balance, cost);
+                return ApiResponse<SubmitSmsResponse>.Fail(3, $"余额不足。当前余额: {balance:F2}元, 本次费用: {cost:F2}元");
+            }
+
             var submitRequest = new SubmitRequest
             {
                 UserId = userId,
@@ -62,12 +76,22 @@ public class SmsController : ControllerBase
                 Ext = request.Ext
             };
 
+            var localId = Guid.NewGuid().ToString("N")[..12];
+            var submitEntity = await _submitRecordService.CreateSubmitRecordAsync(
+                userId,
+                localId,
+                request.Mobile,
+                request.Content,
+                segmentCount);
+
             var result = await submitService.SubmitAsync(submitRequest);
 
             if (result.Success)
             {
+                await _billingService.ChargeAsync(userId, cost, $"SMS to {request.Mobile} ({segmentCount} segments)");
+
                 await _submitRecordService.UpdateSubmitStatusAsync(
-                    result.LocalId,
+                    localId,
                     result.MessageId,
                     null,
                     SmsStatus.Submitted);
@@ -75,19 +99,25 @@ public class SmsController : ControllerBase
                 await _dlrRecordService.CreateDlrRecordAsync(
                     userId,
                     result.MessageId,
-                    result.LocalId,
+                    localId,
                     request.Mobile,
                     request.Content);
 
-                _logger.LogInformation("SMS submitted: {MessageId} to {Mobile}", 
-                    result.MessageId, request.Mobile);
+                _logger.LogInformation("SMS submitted: {LocalId} to {Mobile}, cost: {Cost}", 
+                    localId, request.Mobile, cost);
 
                 return ApiResponse<SubmitSmsResponse>.Success(new SubmitSmsResponse
                 {
-                    MessageId = result.LocalId,
+                    MessageId = localId,
                     Mobile = request.Mobile
                 });
             }
+
+            await _submitRecordService.UpdateSubmitStatusAsync(
+                localId,
+                result.MessageId,
+                null,
+                SmsStatus.Failed);
 
             return ApiResponse<SubmitSmsResponse>.Fail(1, result.ErrorMessage ?? "Submit failed");
         }
@@ -112,6 +142,7 @@ public class SmsController : ControllerBase
         var failCount = 0;
 
         var submitService = _smppClientManager.GetSubmitService();
+        var longMessageProcessor = new SmppClient.Services.LongMessageProcessor();
 
         foreach (var item in request.List)
         {
@@ -119,6 +150,17 @@ public class SmsController : ControllerBase
             {
                 var permissionResult = await _permissionService.CheckSendPermissionAsync(userId, item.Mobile);
                 if (!permissionResult.Allowed)
+                {
+                    failCount++;
+                    continue;
+                }
+
+                var splitResult = longMessageProcessor.Split(item.Content, null);
+                var segmentCount = splitResult.Segments.Count;
+                var cost = await _billingService.CalculateCostAsync(userId, item.Mobile, segmentCount);
+                var balance = await _billingService.GetBalanceAsync(userId);
+
+                if (balance < cost)
                 {
                     failCount++;
                     continue;
@@ -132,32 +174,24 @@ public class SmsController : ControllerBase
                     Ext = item.Ext
                 };
 
+                var localId = Guid.NewGuid().ToString("N")[..12];
+                await _submitRecordService.CreateSubmitRecordAsync(
+                    userId, localId, item.Mobile, item.Content, segmentCount);
+
                 var result = await submitService.SubmitAsync(submitRequest);
 
                 if (result.Success)
                 {
-                    await _submitRecordService.UpdateSubmitStatusAsync(
-                        result.LocalId,
-                        result.MessageId,
-                        null,
-                        SmsStatus.Submitted);
+                    await _billingService.ChargeAsync(userId, cost, $"SMS to {item.Mobile}");
+                    await _submitRecordService.UpdateSubmitStatusAsync(localId, result.MessageId, null, SmsStatus.Submitted);
+                    await _dlrRecordService.CreateDlrRecordAsync(userId, result.MessageId, localId, item.Mobile, item.Content);
 
-                    await _dlrRecordService.CreateDlrRecordAsync(
-                        userId,
-                        result.MessageId,
-                        result.LocalId,
-                        item.Mobile,
-                        item.Content);
-
-                    results.Add(new SubmitSmsResponse
-                    {
-                        MessageId = result.LocalId,
-                        Mobile = item.Mobile
-                    });
+                    results.Add(new SubmitSmsResponse { MessageId = localId, Mobile = item.Mobile });
                     successCount++;
                 }
                 else
                 {
+                    await _submitRecordService.UpdateSubmitStatusAsync(localId, result.MessageId, null, SmsStatus.Failed);
                     failCount++;
                 }
             }
@@ -207,6 +241,7 @@ public class SmsController : ControllerBase
         {
             submit.LocalId,
             submit.Mobile,
+            submit.Content,
             Status = submit.Status.ToString(),
             submit.SubmitTime,
             submit.DlrTime,
@@ -248,8 +283,8 @@ public class SmsController : ControllerBase
         return ApiResponse<object>.Success(result);
     }
 
-    [HttpGet("countries")]
-    public IActionResult GetAllowedCountries()
+    [HttpGet("balance")]
+    public async Task<ApiResponse<object>> GetBalance()
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
@@ -257,8 +292,15 @@ public class SmsController : ControllerBase
             return ApiResponse<object>.Fail(401, "Unauthorized");
         }
 
-        var countries = CountryCodeMapper.GetAllCountryCodes()
-            .Select(code => CountryCodeMapper.GetCountryInfo(code))
+        var balance = await _billingService.GetBalanceAsync(userId);
+        return ApiResponse<object>.Success(new { Balance = balance });
+    }
+
+    [HttpGet("countries")]
+    public IActionResult GetAllowedCountries()
+    {
+        var countries = SmppClient.Utils.CountryCodeMapper.GetAllCountryCodes()
+            .Select(code => SmppClient.Utils.CountryCodeMapper.GetCountryInfo(code))
             .Where(c => c != null)
             .Select(c => new { c!.CountryCode, c.Name, c.Prefix })
             .OrderBy(c => c.CountryCode);
