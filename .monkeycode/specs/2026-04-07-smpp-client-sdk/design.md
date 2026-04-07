@@ -41,8 +41,10 @@ SmppClientPlatform
 │   └── RouteStrategy       # 路由策略
 │
 ├── 队列层 (Queue)
-│   ├── InMemoryQueue        # 内存队列（v1）
-│   └── RabbitMqAdapter      # RabbitMQ适配器（v2）
+│   ├── RabbitMqAdapter      # RabbitMQ队列
+│   ├── SubmitQueue          # 发送队列
+│   ├── DlrQueue             # DLR回执队列
+│   └── DeadLetterQueue      # 死信队列
 │
 ├── 稳定性 (Resilience)
 │   ├── RateLimiter          # TPS控制
@@ -193,18 +195,25 @@ sequenceDiagram
 | 最低价格路由 | 选最便宜通道 |
 | 故障切换 | 自动切换备用通道 |
 
-### 4. 队列层（v1内存队列）
+### 4. 队列层（RabbitMQ）
 
-#### InMemoryQueue
+#### RabbitMqAdapter
 
-- Channel<T>实现
-- 内存存储，重启丢失
-- 适合v1验证
+- 使用RabbitMQ.Client库
+- 支持消息持久化，不丢消息
+- 支持消息确认（Confirm）
+- 解耦发送与业务
 
-**队列类型**：
-- submit_queue：待发送队列
-- dlr_queue：状态报告队列
-- dead_letter_queue：死信队列
+**队列设计**：
+| 队列名 | 说明 |
+|--------|------|
+| sms.submit | 待发送消息 |
+| sms.dlr | 状态报告 |
+| sms.dlx | 死信队列 |
+
+**Exchange配置**：
+- exchange.submit：发送交换机（direct）
+- exchange.dlr：回执交换机（fanout）
 
 ### 5. 稳定性层
 
@@ -379,7 +388,7 @@ Response:
 |------|------|------|
 | 运行时 | .NET 8 | 最新LTS |
 | Web框架 | ASP.NET Core 8 | 高性能 |
-| 队列 | Channel<T> | v1内存队列 |
+| 队列 | RabbitMQ.Client | 消息队列 |
 | ORM | EF Core 8 | 数据库访问 |
 | 数据库 | PostgreSQL | 存储用户、账单 |
 | 缓存 | Redis | Session缓存 |
@@ -423,9 +432,9 @@ src/
 │   │   └── RouteStrategy.cs
 │   │
 │   ├── Queue/
-│   │   ├── InMemoryQueue.cs
+│   │   ├── RabbitMqAdapter.cs
 │   │   ├── QueueNames.cs
-│   │   └── RabbitMqAdapter.cs
+│   │   └── DeadLetterHandler.cs
 │   │
 │   ├── Resilience/
 │   │   ├── RateLimiter.cs
