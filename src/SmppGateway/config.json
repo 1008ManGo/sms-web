@@ -1,0 +1,33 @@
+{
+  "Host": "0.0.0.0",
+  "Port": 8080,
+  "Database": {
+    "Host": "localhost",
+    "Port": 5432,
+    "Username": "postgres",
+    "Password": "postgres",
+    "Database": "smpp_gateway"
+  },
+  "RabbitMq": {
+    "Host": "localhost",
+    "Port": 5672,
+    "Username": "guest",
+    "Password": "guest"
+  },
+  "Accounts": [
+    {
+      "Id": "account-1",
+      "Name": "运营商1",
+      "Host": "127.0.0.1",
+      "Port": 2775,
+      "SystemId": "smppclient",
+      "Password": "password",
+      "SystemType": "SMPP",
+      "Weight": 100,
+      "Priority": 1,
+      "MaxTps": 100,
+      "MaxSessions": 2,
+      "Enabled": true
+    }
+  ]
+}
