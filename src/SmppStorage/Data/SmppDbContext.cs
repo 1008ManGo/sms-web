@@ -17,6 +17,7 @@ public class SmppDbContext : DbContext
     public DbSet<AuditLogEntity> AuditLogs => Set<AuditLogEntity>();
     public DbSet<UserCountryPermissionEntity> UserCountryPermissions => Set<UserCountryPermissionEntity>();
     public DbSet<UserChannelPermissionEntity> UserChannelPermissions => Set<UserChannelPermissionEntity>();
+    public DbSet<UserCountryPriceEntity> UserCountryPrices => Set<UserCountryPriceEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,6 +66,11 @@ public class SmppDbContext : DbContext
             entity.HasIndex(e => new { e.UserId, e.AccountId }).IsUnique();
         });
 
+        modelBuilder.Entity<UserCountryPriceEntity>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.CountryCode }).IsUnique();
+        });
+
         SeedData(modelBuilder);
     }
 
@@ -102,36 +108,7 @@ public class SmppDbContext : DbContext
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
 
-        modelBuilder.Entity<UserCountryPermissionEntity>().HasData(
-            new UserCountryPermissionEntity
-            {
-                Id = Guid.Parse("55555555-5555-5555-5555-555555555551"),
-                UserId = defaultUserId,
-                CountryCode = "86",
-                Enabled = true,
-                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            },
-            new UserCountryPermissionEntity
-            {
-                Id = Guid.Parse("55555555-5555-5555-5555-555555555552"),
-                UserId = defaultUserId,
-                CountryCode = "1",
-                Enabled = true,
-                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            }
-        );
-
-        modelBuilder.Entity<UserChannelPermissionEntity>().HasData(
-            new UserChannelPermissionEntity
-            {
-                Id = Guid.Parse("66666666-6666-6666-6666-666666666661"),
-                UserId = defaultUserId,
-                AccountId = "account-1",
-                MaxTps = 100,
-                Enabled = true,
-                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            }
-        );
+        // 新用户默认不分配国家和通道，需要管理员手动配置
 
         modelBuilder.Entity<PriceConfigEntity>().HasData(
             new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333331"), CountryCode = "86", PricePerSegment = 0.05m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },

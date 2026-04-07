@@ -15,6 +15,9 @@ public interface IPermissionRepository
     Task RemoveCountryPermissionAsync(Guid userId, string countryCode);
     Task RemoveChannelPermissionAsync(Guid userId, string accountId);
     Task<bool> HasAnyPermissionAsync(Guid userId);
+    Task<decimal> GetUserCountryPriceAsync(Guid userId, string countryCode);
+    Task SetUserCountryPriceAsync(Guid userId, string countryCode, decimal pricePerSegment);
+    Task<IEnumerable<UserCountryPriceEntity>> GetUserPricesAsync(Guid userId);
 }
 
 public class PermissionRepository : IPermissionRepository
@@ -139,5 +142,53 @@ public class PermissionRepository : IPermissionRepository
         var hasChannel = await _context.UserChannelPermissions
             .AnyAsync(p => p.UserId == userId && p.Enabled);
         return hasCountry && hasChannel;
+    }
+
+    public async Task<decimal> GetUserCountryPriceAsync(Guid userId, string countryCode)
+    {
+        var userPrice = await _context.UserCountryPrices
+            .FirstOrDefaultAsync(p => p.UserId == userId && p.CountryCode == countryCode && p.Enabled);
+
+        if (userPrice != null)
+            return userPrice.PricePerSegment;
+
+        var defaultPrice = await _context.PriceConfigs
+            .FirstOrDefaultAsync(p => p.CountryCode == countryCode && p.Enabled);
+
+        return defaultPrice?.PricePerSegment ?? 0.10m;
+    }
+
+    public async Task SetUserCountryPriceAsync(Guid userId, string countryCode, decimal pricePerSegment)
+    {
+        var existing = await _context.UserCountryPrices
+            .FirstOrDefaultAsync(p => p.UserId == userId && p.CountryCode == countryCode);
+
+        if (existing != null)
+        {
+            existing.PricePerSegment = pricePerSegment;
+            existing.Enabled = true;
+            existing.UpdatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            _context.UserCountryPrices.Add(new UserCountryPriceEntity
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                CountryCode = countryCode,
+                PricePerSegment = pricePerSegment,
+                Enabled = true,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<IEnumerable<UserCountryPriceEntity>> GetUserPricesAsync(Guid userId)
+    {
+        return await _context.UserCountryPrices
+            .Where(p => p.UserId == userId && p.Enabled)
+            .ToListAsync();
     }
 }

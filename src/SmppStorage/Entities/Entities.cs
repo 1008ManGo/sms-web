@@ -270,3 +270,27 @@ public class UserChannelPermissionEntity
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 }
+
+public class UserCountryPriceEntity
+{
+    [Key]
+    public Guid Id { get; set; }
+
+    [Required]
+    public Guid UserId { get; set; }
+
+    [ForeignKey(nameof(UserId))]
+    public UserEntity? User { get; set; }
+
+    [Required]
+    [MaxLength(20)]
+    public string CountryCode { get; set; } = string.Empty;
+
+    [Column(TypeName = "decimal(18,6)")]
+    public decimal PricePerSegment { get; set; }
+
+    public bool Enabled { get; set; } = true;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; set; }
+}
