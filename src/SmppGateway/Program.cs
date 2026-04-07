@@ -1,8 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using SmppClient.Queue;
 using SmppGateway.Auth;
 using SmppGateway.Configuration;
 using SmppGateway.Services;
+using SmppStorage.Data;
+using SmppStorage.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +24,18 @@ else
 
 builder.Services.AddSingleton(config);
 
-builder.Services.AddSingleton<IUserService, InMemoryUserService>();
+builder.Services.AddDbContext<SmppDbContext>(options =>
+    options.UseNpgsql(config.GetConnectionString()));
+
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<ISmsSubmitRepository, SmsSubmitRepository>();
+builder.Services.AddScoped<IDlrRepository, DlrRepository>();
+builder.Services.AddScoped<IPriceRepository, PriceRepository>();
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<IUserService, DbUserService>();
+builder.Services.AddScoped<IBillingService, BillingService>();
+
 builder.Services.AddSingleton<ISmppClientManager, SmppClientManager>();
 
 builder.Services.AddAuthentication(ApiKeyAuthenticationOptions.DefaultScheme)
@@ -59,6 +73,12 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<SmppDbContext>();
+    await dbContext.Database.EnsureCreatedAsync();
+}
 
 var smppClientManager = app.Services.GetRequiredService<ISmppClientManager>();
 await smppClientManager.StartAsync();

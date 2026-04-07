@@ -7,6 +7,11 @@ public class AppConfig
     public DatabaseConfig Database { get; set; } = new();
     public RabbitMqConfig RabbitMq { get; set; } = new();
     public List<SmppAccountConfig> Accounts { get; set; } = new();
+
+    public string GetConnectionString()
+    {
+        return $"Host={Database.Host};Port={Database.Port};Database={Database.Database};Username={Database.Username};Password={Database.Password}";
+    }
 }
 
 public class DatabaseConfig
