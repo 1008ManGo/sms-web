@@ -15,6 +15,8 @@ public class SmppDbContext : DbContext
     public DbSet<PriceConfigEntity> PriceConfigs => Set<PriceConfigEntity>();
     public DbSet<DlrRecordEntity> DlrRecords => Set<DlrRecordEntity>();
     public DbSet<AuditLogEntity> AuditLogs => Set<AuditLogEntity>();
+    public DbSet<UserCountryPermissionEntity> UserCountryPermissions => Set<UserCountryPermissionEntity>();
+    public DbSet<UserChannelPermissionEntity> UserChannelPermissions => Set<UserChannelPermissionEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -50,6 +52,17 @@ public class SmppDbContext : DbContext
         modelBuilder.Entity<SmppAccountEntity>(entity =>
         {
             entity.HasIndex(e => e.AccountId).IsUnique();
+        });
+
+        modelBuilder.Entity<UserCountryPermissionEntity>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.CountryCode }).IsUnique();
+            entity.HasIndex(e => e.CountryCode);
+        });
+
+        modelBuilder.Entity<UserChannelPermissionEntity>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.AccountId }).IsUnique();
         });
 
         SeedData(modelBuilder);
@@ -89,23 +102,61 @@ public class SmppDbContext : DbContext
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
 
-        modelBuilder.Entity<PriceConfigEntity>().HasData(
-            new PriceConfigEntity
+        modelBuilder.Entity<UserCountryPermissionEntity>().HasData(
+            new UserCountryPermissionEntity
             {
-                Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+                Id = Guid.Parse("55555555-5555-5555-5555-555555555551"),
+                UserId = defaultUserId,
                 CountryCode = "86",
-                PricePerSegment = 0.05m,
                 Enabled = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             },
-            new PriceConfigEntity
+            new UserCountryPermissionEntity
             {
-                Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                Id = Guid.Parse("55555555-5555-5555-5555-555555555552"),
+                UserId = defaultUserId,
                 CountryCode = "1",
-                PricePerSegment = 0.10m,
                 Enabled = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }
+        );
+
+        modelBuilder.Entity<UserChannelPermissionEntity>().HasData(
+            new UserChannelPermissionEntity
+            {
+                Id = Guid.Parse("66666666-6666-6666-6666-666666666661"),
+                UserId = defaultUserId,
+                AccountId = "account-1",
+                MaxTps = 100,
+                Enabled = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
+        );
+
+        modelBuilder.Entity<PriceConfigEntity>().HasData(
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333331"), CountryCode = "86", PricePerSegment = 0.05m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333332"), CountryCode = "1", PricePerSegment = 0.10m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333333"), CountryCode = "44", PricePerSegment = 0.12m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333334"), CountryCode = "81", PricePerSegment = 0.15m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333335"), CountryCode = "82", PricePerSegment = 0.12m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333336"), CountryCode = "60", PricePerSegment = 0.08m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333337"), CountryCode = "65", PricePerSegment = 0.10m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333338"), CountryCode = "63", PricePerSegment = 0.08m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-333333333339"), CountryCode = "62", PricePerSegment = 0.06m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333a"), CountryCode = "84", PricePerSegment = 0.06m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333b"), CountryCode = "66", PricePerSegment = 0.07m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333c"), CountryCode = "55", PricePerSegment = 0.10m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333d"), CountryCode = "54", PricePerSegment = 0.10m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333e"), CountryCode = "56", PricePerSegment = 0.10m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333f"), CountryCode = "52", PricePerSegment = 0.10m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333g"), CountryCode = "51", PricePerSegment = 0.10m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333h"), CountryCode = "91", PricePerSegment = 0.05m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333i"), CountryCode = "92", PricePerSegment = 0.05m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333j"), CountryCode = "94", PricePerSegment = 0.05m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333k"), CountryCode = "880", PricePerSegment = 0.04m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333l"), CountryCode = "855", PricePerSegment = 0.04m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333m"), CountryCode = "856", PricePerSegment = 0.04m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+            new PriceConfigEntity { Id = Guid.Parse("33333333-3333-3333-3333-33333333333n"), CountryCode = "95", PricePerSegment = 0.04m, Enabled = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
         );
     }
 }

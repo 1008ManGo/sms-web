@@ -13,23 +13,39 @@ namespace SmppGateway.Controllers;
 public class SmsController : ControllerBase
 {
     private readonly ISmppClientManager _smppClientManager;
+    private readonly IPermissionService _permissionService;
+    private readonly IBillingService _billingService;
     private readonly ILogger<SmsController> _logger;
 
     public SmsController(
         ISmppClientManager smppClientManager,
+        IPermissionService permissionService,
+        IBillingService billingService,
         ILogger<SmsController> logger)
     {
         _smppClientManager = smppClientManager;
+        _permissionService = permissionService;
+        _billingService = billingService;
         _logger = logger;
     }
 
     [HttpPost("submit")]
     public async Task<ApiResponse<SubmitSmsResponse>> Submit([FromBody] SubmitSmsRequest request)
     {
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+        {
+            return ApiResponse<SubmitSmsResponse>.Fail(401, "Unauthorized");
+        }
 
         try
         {
+            var permissionResult = await _permissionService.CheckSendPermissionAsync(userId, request.Mobile);
+            if (!permissionResult.Allowed)
+            {
+                return ApiResponse<SubmitSmsResponse>.Fail(2, permissionResult.ErrorMessage ?? "Permission denied");
+            }
+
             var submitService = _smppClientManager.GetSubmitService();
             var submitRequest = new SubmitRequest
             {
@@ -64,6 +80,12 @@ public class SmsController : ControllerBase
     [HttpPost("batch")]
     public async Task<ApiResponse<BatchSubmitSmsResponse>> BatchSubmit([FromBody] BatchSubmitSmsRequest request)
     {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+        {
+            return ApiResponse<BatchSubmitSmsResponse>.Fail(401, "Unauthorized");
+        }
+
         var results = new List<SubmitSmsResponse>();
         var successCount = 0;
         var failCount = 0;
@@ -74,6 +96,13 @@ public class SmsController : ControllerBase
         {
             try
             {
+                var permissionResult = await _permissionService.CheckSendPermissionAsync(userId, item.Mobile);
+                if (!permissionResult.Allowed)
+                {
+                    failCount++;
+                    continue;
+                }
+
                 var submitRequest = new SubmitRequest
                 {
                     Mobile = item.Mobile,
@@ -134,5 +163,23 @@ public class SmsController : ControllerBase
                 ? (record.DlrTime.Value - record.SubmitTime).TotalSeconds 
                 : (double?)null
         });
+    }
+
+    [HttpGet("countries")]
+    public IActionResult GetAllowedCountries()
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+        {
+            return ApiResponse<object>.Fail(401, "Unauthorized");
+        }
+
+        var countries = SmppClient.Utils.CountryCodeMapper.GetAllCountryCodes()
+            .Select(code => SmppClient.Utils.CountryCodeMapper.GetCountryInfo(code))
+            .Where(c => c != null)
+            .Select(c => new { c!.CountryCode, c.Name, c.Prefix })
+            .OrderBy(c => c.CountryCode);
+
+        return ApiResponse<object>.Success(countries);
     }
 }

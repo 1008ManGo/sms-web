@@ -35,8 +35,10 @@ builder.Services.AddScoped<IDlrRepository, DlrRepository>();
 builder.Services.AddScoped<IPriceRepository, PriceRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<IPermissionRepository, PermissionRepository>();
 builder.Services.AddScoped<IUserService, DbUserService>();
 builder.Services.AddScoped<IBillingService, BillingService>();
+builder.Services.AddScoped<IPermissionService, PermissionService>();
 
 builder.Services.AddSingleton<ISmppClientManager, SmppClientManager>();
 

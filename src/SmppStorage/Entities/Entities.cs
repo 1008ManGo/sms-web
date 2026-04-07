@@ -223,3 +223,50 @@ public class AuditLogEntity
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class UserCountryPermissionEntity
+{
+    [Key]
+    public Guid Id { get; set; }
+
+    [Required]
+    public Guid UserId { get; set; }
+
+    [ForeignKey(nameof(UserId))]
+    public UserEntity? User { get; set; }
+
+    [Required]
+    [MaxLength(20)]
+    public string CountryCode { get; set; } = string.Empty;
+
+    public bool Enabled { get; set; } = true;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public class UserChannelPermissionEntity
+{
+    [Key]
+    public Guid Id { get; set; }
+
+    [Required]
+    public Guid UserId { get; set; }
+
+    [ForeignKey(nameof(UserId))]
+    public UserEntity? User { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string AccountId { get; set; } = string.Empty;
+
+    [ForeignKey(nameof(AccountId))]
+    public SmppAccountEntity? Account { get; set; }
+
+    public int MaxTps { get; set; } = 100;
+
+    public bool Enabled { get; set; } = true;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; set; }
+}
