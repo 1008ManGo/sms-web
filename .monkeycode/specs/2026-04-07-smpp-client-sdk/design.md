@@ -167,14 +167,37 @@ sequenceDiagram
 
 #### 长短信
 
-- 自动拆分：>70字符(GSM7)或140字符(UCS2)
-- UDH格式：SAR reference + segment + total
-- 支持message_payload单条模式
-- **自动编码选择**：
-  - 内容检测自动选择UCS2或GSM7
-  - 优先使用GSM7（节省空间）
-  - 支持纯ASCII和GSM7字符集自动切换
-  - 超长短信自动切换message_payload模式
+**单条消息长度限制**：
+
+| 编码类型 | 字符集 | 单条最大字符数 |
+|----------|--------|----------------|
+| 7-bit | GSM 3.38, ASCII, IA5 | 160 |
+| 8-bit | ISO-8859-1, ISO-8859-5, ISO-8859-8 | 140 |
+| 16-bit | USC-2 (Unicode) | 70 |
+| 多字节 | Korean (KS C 5601), Japanese (JIS) | 70-140 |
+
+**拆分规则**：
+- 7-bit：>160字符时拆分，每段153字符（UDH占7字节）
+- 8-bit：>140字符时拆分，每段134字符（UDH占6字节）
+- 16-bit：>70字符时拆分，每段67字符（UDH占6字节）
+
+**UDH格式**：
+- SAR reference：参考编号（唯一标识该消息）
+- SAR current segment：当前分段序号（1-based）
+- SAR segment count：总分段数
+- total = 6字节（7-bit）或5字节（8/16-bit）
+
+**自动编码选择**：
+- 内容检测自动选择最优编码
+- 优先使用7-bit（GSM7/ASCII），节省空间
+- 纯ASCII自动使用7-bit
+- 包含特殊字符时切换UCS2
+- 超长短信自动切换message_payload模式
+
+**message_payload模式**（替代拆分）：
+- 单条消息传输完整内容
+- 绕过UDH拆分限制
+- 运营商支持时优先使用
 
 ### 3. 业务层
 
