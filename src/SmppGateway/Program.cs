@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Prometheus;
 using SmppClient.Queue;
 using SmppGateway.Auth;
 using SmppGateway.Configuration;
+using SmppGateway.Observability;
 using SmppGateway.Services;
 using SmppStorage.Data;
 using SmppStorage.Repositories;
@@ -37,6 +39,13 @@ builder.Services.AddScoped<IUserService, DbUserService>();
 builder.Services.AddScoped<IBillingService, BillingService>();
 
 builder.Services.AddSingleton<ISmppClientManager, SmppClientManager>();
+
+builder.Services.AddSingleton<MetricsCollector>();
+
+builder.Services.AddHealthChecks()
+    .AddCheck<SmppHealthCheck>("smpp_sessions", tags: new[] { "smpp" })
+    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "db" })
+    .AddCheck<QueueHealthCheck>("queue", tags: new[] { "queue" });
 
 builder.Services.AddAuthentication(ApiKeyAuthenticationOptions.DefaultScheme)
     .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
@@ -83,6 +92,8 @@ using (var scope = app.Services.CreateScope())
 var smppClientManager = app.Services.GetRequiredService<ISmppClientManager>();
 await smppClientManager.StartAsync();
 
+var metricsCollector = app.Services.GetRequiredService<MetricsCollector>();
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -92,6 +103,29 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseHttpMetrics();
+app.UseMetrics();
+
+app.MapHealthChecks("/healthz", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var result = new
+        {
+            Status = report.Status.ToString(),
+            Timestamp = DateTime.UtcNow,
+            Duration = report.TotalDuration.TotalMilliseconds,
+            Checks = report.Entries.Select(e => new
+            {
+                Name = e.Key,
+                Status = e.Value.Status.ToString(),
+                Duration = e.Value.Duration.TotalMilliseconds,
+                Description = e.Value.Description
+            })
+        };
+        await context.Response.WriteAsJsonAsync(result);
+    }
+});
 
 app.MapControllers();
 app.MapMetrics();

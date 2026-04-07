@@ -281,17 +281,26 @@ sequenceDiagram
 
 | 指标 | 类型 | 说明 |
 |------|------|------|
-| smpp_connected_sessions | Gauge | 连接数 |
+| smpp_connected_sessions | Gauge | 当前连接数 |
 | smpp_reconnect_total | Counter | 重连次数 |
 | smpp_submit_tps | Gauge | 提交TPS |
-| smpp_submit_success | Counter | 成功数 |
-| smpp_submit_fail | Counter | 失败数 |
-| smpp_dlr_received | Counter | DLR数 |
+| smpp_submit_success_total | Counter | 成功数 |
+| smpp_submit_fail_total | Counter | 失败数 |
+| smpp_dlr_received_total | Counter | DLR数 |
 | smpp_dlr_delay_seconds | Histogram | DLR延迟（p50/p95/p99） |
 | smpp_window_usage | Gauge | 窗口使用率 |
 | smpp_queue_length | Gauge | 队列长度 |
-| smpp_circuit_breaker | Gauge | 熔断状态 |
-| smpp_dlr_delay_alert | Alert | DLR延迟告警阈值 |
+| smpp_circuit_breaker_state | Gauge | 熔断状态（0=closed,1=open,2=half-open） |
+| smpp_api_request_total | Counter | API请求总数 |
+| smpp_api_request_duration_seconds | Histogram | API延迟 |
+| smpp_user_balance | Gauge | 用户余额 |
+| smpp_billing_deduction_total | Counter | 扣费次数 |
+| smpp_billing_charge_total | Counter | 计费次数 |
+
+**健康检查Endpoint**：
+- `/healthz` - 完整健康检查（数据库+队列+SMPP会话）
+- `/healthz/live` - Kubernetes liveness探针
+- `/healthz/ready` - Kubernetes readiness探针
 
 **DLR延迟告警**：
 - p99 > 30s 触发告警

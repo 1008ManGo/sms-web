@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using SmppGateway.Observability;
 using SmppGateway.Services;
 
 namespace SmppGateway.Controllers;
@@ -8,21 +10,25 @@ namespace SmppGateway.Controllers;
 public class HealthController : ControllerBase
 {
     private readonly ISmppClientManager _smppClientManager;
+    private readonly HealthCheckService _healthCheckService;
     private readonly ILogger<HealthController> _logger;
 
     public HealthController(
         ISmppClientManager smppClientManager,
+        HealthCheckService healthCheckService,
         ILogger<HealthController> logger)
     {
         _smppClientManager = smppClientManager;
+        _healthCheckService = healthCheckService;
         _logger = logger;
     }
 
     [HttpGet("health")]
-    public IActionResult Health()
+    public async Task<IActionResult> Health()
     {
+        var report = await _healthCheckService.CheckHealthAsync();
         var healthySessions = _smppClientManager.HealthySessions;
-        var isHealthy = healthySessions > 0;
+        var isHealthy = report.Status == HealthStatus.Healthy && healthySessions > 0;
 
         var response = new
         {
@@ -32,7 +38,13 @@ public class HealthController : ControllerBase
             {
                 Total = _smppClientManager.TotalSessions,
                 Healthy = healthySessions
-            }
+            },
+            Components = report.Entries.Select(e => new
+            {
+                Name = e.Key,
+                Status = e.Value.Status.ToString(),
+                Duration = e.Value.Duration.TotalMilliseconds
+            })
         };
 
         if (isHealthy)
@@ -41,6 +53,23 @@ public class HealthController : ControllerBase
         }
 
         return StatusCode(503, response);
+    }
+
+    [HttpGet("health/live")]
+    public IActionResult Live()
+    {
+        return Ok(new { Status = "alive", Timestamp = DateTime.UtcNow });
+    }
+
+    [HttpGet("health/ready")]
+    public async Task<IActionResult> Ready()
+    {
+        var healthySessions = _smppClientManager.HealthySessions;
+        if (healthySessions > 0)
+        {
+            return Ok(new { Status = "ready", Timestamp = DateTime.UtcNow });
+        }
+        return StatusCode(503, new { Status = "not_ready", Timestamp = DateTime.UtcNow });
     }
 
     [HttpGet("channels/status")]
