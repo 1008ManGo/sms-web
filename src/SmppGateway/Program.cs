@@ -39,8 +39,12 @@ builder.Services.AddScoped<IPermissionRepository, PermissionRepository>();
 builder.Services.AddScoped<IUserService, DbUserService>();
 builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<ISubmitRecordService, SubmitRecordService>();
+builder.Services.AddScoped<IDlrRecordService, DlrRecordService>();
 
 builder.Services.AddSingleton<ISmppClientManager, SmppClientManager>();
+
+builder.Services.AddSingleton<DlrEventHandler>();
 
 builder.Services.AddSingleton<MetricsCollector>();
 

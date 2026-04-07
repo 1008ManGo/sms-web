@@ -6,6 +6,7 @@ namespace SmppClient.Services;
 
 public class SubmitRequest
 {
+    public Guid? UserId { get; set; }
     public string Mobile { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string? AccountId { get; set; }
@@ -19,6 +20,7 @@ public class SubmitResult
     public bool Success { get; set; }
     public string MessageId { get; set; } = string.Empty;
     public string LocalId { get; set; } = string.Empty;
+    public int SegmentCount { get; set; } = 1;
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
 }
@@ -96,7 +98,8 @@ public class SubmitService : IDisposable
                 {
                     Success = true,
                     MessageId = firstSuccess.MessageId,
-                    LocalId = localId
+                    LocalId = localId,
+                    SegmentCount = splitResult.Segments.Count
                 };
             }
 
@@ -104,6 +107,7 @@ public class SubmitService : IDisposable
             {
                 Success = false,
                 LocalId = localId,
+                SegmentCount = splitResult.Segments.Count,
                 ErrorCode = lastResult.ErrorCode ?? "SEND_FAILED"
             };
         }
