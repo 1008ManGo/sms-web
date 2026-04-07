@@ -12,7 +12,7 @@ namespace SmppGateway.Controllers;
 
 [ApiController]
 [Route("api/v1/admin")]
-[Authorize]
+[Authorize(AuthenticationSchemes = "AdminKey")]
 public class AdminController : ControllerBase
 {
     private readonly IUserRepository _userRepository;

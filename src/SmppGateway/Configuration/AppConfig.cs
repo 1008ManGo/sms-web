@@ -4,6 +4,7 @@ public class AppConfig
 {
     public string Host { get; set; } = "0.0.0.0";
     public int Port { get; set; } = 8080;
+    public string AdminApiKey { get; set; } = "admin-a1b2c3d4e5f678901234567890123456";
     public DatabaseConfig Database { get; set; } = new();
     public RabbitMqConfig RabbitMq { get; set; } = new();
     public List<SmppAccountConfig> Accounts { get; set; } = new();

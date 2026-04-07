@@ -87,6 +87,7 @@ public class SmppDbContext : DbContext
             ApiKey = "a1b2c3d4e5f678901234567890123456",
             Balance = 10000m,
             Status = UserStatus.Active,
+            Role = UserRole.Admin,
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
 

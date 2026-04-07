@@ -25,6 +25,8 @@ public class UserEntity
 
     public UserStatus Status { get; set; } = UserStatus.Active;
 
+    public UserRole Role { get; set; } = UserRole.User;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? UpdatedAt { get; set; }
@@ -35,6 +37,12 @@ public enum UserStatus
     Active = 0,
     Suspended = 1,
     Deleted = 2
+}
+
+public enum UserRole
+{
+    User = 0,
+    Admin = 1
 }
 
 public class SmppAccountEntity

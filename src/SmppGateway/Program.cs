@@ -53,9 +53,11 @@ builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "db" })
     .AddCheck<QueueHealthCheck>("queue", tags: new[] { "queue" });
 
-builder.Services.AddAuthentication(ApiKeyAuthenticationOptions.DefaultScheme)
+builder.Services.AddAuthentication()
     .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
-        ApiKeyAuthenticationOptions.DefaultScheme, _ => { });
+        ApiKeyAuthenticationOptions.DefaultScheme, _ => { })
+    .AddScheme<AdminAuthenticationOptions, AdminAuthenticationHandler>(
+        AdminAuthenticationOptions.DefaultScheme, _ => { });
 
 builder.Services.AddAuthorization();
 
@@ -64,13 +66,23 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "SMPP Gateway API", Version = "v1" });
+    
     c.AddSecurityDefinition("ApiKey", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
         In = Microsoft.OpenApi.Models.ParameterLocation.Header,
         Name = "X-Api-Key",
-        Description = "API Key authentication"
+        Description = "User API Key authentication"
     });
+    
+    c.AddSecurityDefinition("AdminKey", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Name = "X-Admin-Key",
+        Description = "Admin API Key authentication"
+    });
+    
     c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
     {
         {
