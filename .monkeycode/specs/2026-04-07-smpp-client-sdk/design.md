@@ -132,6 +132,11 @@ sequenceDiagram
 - 默认窗口：50（可配置10-200）
 - 实时监控窗口使用率
 - 窗口满时阻塞发送
+- **动态窗口调整**：
+  - 根据TPS和上游响应延迟自动调节
+  - 响应延迟升高时自动减小窗口
+  - 响应正常时逐步增大窗口
+  - 配置：min_window/max_window/adjust_interval
 
 #### SequenceManager
 
@@ -165,6 +170,11 @@ sequenceDiagram
 - 自动拆分：>70字符(GSM7)或140字符(UCS2)
 - UDH格式：SAR reference + segment + total
 - 支持message_payload单条模式
+- **自动编码选择**：
+  - 内容检测自动选择UCS2或GSM7
+  - 优先使用GSM7（节省空间）
+  - 支持纯ASCII和GSM7字符集自动切换
+  - 超长短信自动切换message_payload模式
 
 ### 3. 业务层
 
@@ -231,15 +241,16 @@ sequenceDiagram
 
 #### RetryPolicy（重试策略）
 
-| 错误码 | 重试 |
+| 错误码 | 处理 |
 |--------|------|
-| ESME_RSYSERR | ✅ |
-| ESME_RTHROTTLED | ✅ |
-| ESME_RMSGQFUL | ✅ |
-| 其他 | ❌ |
+| ESME_RSYSERR | 指数退避重试（1s→3s），最多2次 |
+| ESME_RTHROTTLED | 短时队列缓冲，降速等待，自动恢复 |
+| ESME_RMSGQFUL | 短时队列缓冲，避免瞬间拥塞 |
+| 其他 | ❌ 不重试 |
 
 - 最多2次
 - 指数退避：1s → 3s
+- **Throttled缓冲**：RTHROTTLED/MSGQFUL时进入缓冲队列，定期重试
 
 ### 6. 监控层
 
@@ -253,10 +264,15 @@ sequenceDiagram
 | smpp_submit_success | Counter | 成功数 |
 | smpp_submit_fail | Counter | 失败数 |
 | smpp_dlr_received | Counter | DLR数 |
-| smpp_dlr_delay_seconds | Histogram | DLR延迟 |
+| smpp_dlr_delay_seconds | Histogram | DLR延迟（p50/p95/p99） |
 | smpp_window_usage | Gauge | 窗口使用率 |
 | smpp_queue_length | Gauge | 队列长度 |
 | smpp_circuit_breaker | Gauge | 熔断状态 |
+| smpp_dlr_delay_alert | Alert | DLR延迟告警阈值 |
+
+**DLR延迟告警**：
+- p99 > 30s 触发告警
+- 连续告警自动触发上游健康检查
 
 ### 7. 存储层
 
@@ -534,6 +550,61 @@ src/
 | 集成 | 模拟SMPP服务器收发 | TestContainers |
 | 性能 | 500-1000 TPS基准 | BenchmarkDotNet |
 | 故障 | 断连、重连、熔断 | 模拟器 |
+
+---
+
+## 安全与审计
+
+### API安全
+
+- API Key认证：每个用户独立API Key
+- Key加密存储：使用AES加密存储
+- 访问限制：IP白名单（可选）
+- 请求限流：防止暴力调用
+
+### 敏感信息保护
+
+- 密码加密：BCrypt哈希
+- 运营商密码：加密存储，运行时解密
+- 日志脱敏：手机号、验证码脱敏显示
+
+### TLS支持（可选）
+
+- 与运营商连接时支持TLS加密
+- 证书校验
+
+### 审计日志
+
+- 所有管理操作记录审计日志
+- 短信发送记录可追溯
+- 日志保留90天
+
+---
+
+## 性能演练
+
+### 压测目标
+
+| 阶段 | 目标TPS | 验证项 |
+|------|---------|--------|
+| v1 | 500 | 窗口配置、连接池大小 |
+| v2 | 1000 | 队列消费能力、优化点识别 |
+| v3 | 2000+ | 分布式扩展 |
+
+### 压测场景
+
+1. **基准测试**：单通道最大TPS
+2. **窗口测试**：不同窗口大小对吞吐的影响
+3. **并发测试**：多用户同时发送
+4. **熔断测试**：故障切换恢复时间
+5. **长稳测试**：24小时连续运行
+
+### 监控指标
+
+- 响应延迟（p50/p95/p99）
+- 窗口使用率趋势
+- 队列积压情况
+- 内存/GC指标
 
 ---
 
