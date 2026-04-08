@@ -316,7 +316,6 @@ public class UserChannelPermissionEntity
     [MaxLength(100)]
     public string AccountId { get; set; } = string.Empty;
 
-    [ForeignKey(nameof(AccountId))]
     public SmppAccountEntity? Account { get; set; }
 
     public int MaxTps { get; set; } = 100;
