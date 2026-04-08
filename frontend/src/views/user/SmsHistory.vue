@@ -116,8 +116,17 @@ const loadHistory = async () => {
     })
     
     if (res.success) {
-      historyList.value = res.data?.records || []
-      pagination.total = res.data?.total || 0
+      const data = res.data
+      if (Array.isArray(data)) {
+        historyList.value = data
+        pagination.total = data.length
+      } else if (data && typeof data === 'object') {
+        historyList.value = data.records || data.list || Object.values(data)[0] || []
+        pagination.total = data.total || historyList.value.length
+      } else {
+        historyList.value = []
+        pagination.total = 0
+      }
     }
   } catch (error) {
     console.error('Failed to load history:', error)

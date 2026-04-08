@@ -47,8 +47,13 @@
             <span>可发送国家</span>
           </template>
           <div class="countries-list">
-            <el-tag v-for="c in allowedCountries" :key="c.code" size="small" style="margin: 4px">
-              {{ c.code }} - {{ c.name }}
+            <el-tag 
+              v-for="c in allowedCountries" 
+              :key="c.countryCode || c.code" 
+              size="small" 
+              style="margin: 4px"
+            >
+              {{ c.countryCode || c.code }} - {{ c.name }}
             </el-tag>
           </div>
         </el-card>
@@ -105,7 +110,14 @@ const loadData = async () => {
       balance.value = balanceRes.data?.balance || 0
     }
     if (countriesRes.success) {
-      allowedCountries.value = countriesRes.data || []
+      const data = countriesRes.data
+      if (Array.isArray(data)) {
+        allowedCountries.value = data
+      } else if (data && typeof data === 'object') {
+        allowedCountries.value = Object.values(data)
+      } else {
+        allowedCountries.value = []
+      }
     }
   } catch (error) {
     console.error('Failed to load data:', error)
@@ -142,7 +154,6 @@ const handleSubmit = async () => {
       }
     }
     
-    // Refresh balance
     const balanceRes = await userApi.getBalance()
     if (balanceRes.success) {
       balance.value = balanceRes.data?.balance || 0

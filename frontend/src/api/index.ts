@@ -33,12 +33,11 @@ api.interceptors.response.use(
 
 export default api
 
-// User API
 export const userApi = {
-  submitSms: (data: { mobile: string; content: string }) => 
+  submitSms: (data: { mobile: string; content: string; idempotencyKey?: string }) => 
     api.post('/sms/submit', data),
   
-  batchSubmit: (data: { messages: Array<{ mobile: string; content: string }> }) => 
+  batchSubmit: (data: { messages: Array<{ mobile: string; content: string; idempotencyKey?: string }> }) => 
     api.post('/sms/batch', data),
   
   getStatus: (localId: string) => 
@@ -54,9 +53,7 @@ export const userApi = {
     api.get('/sms/countries')
 }
 
-// Admin API
 export const adminApi = {
-  // Users
   getUsers: () => api.get('/admin/users'),
   getUser: (userId: string) => api.get(`/admin/users/${userId}`),
   createUser: (data: { username: string; password: string; initialBalance?: number }) => 
@@ -65,7 +62,6 @@ export const adminApi = {
     api.post(`/admin/users/${userId}/recharge`, data),
   getUserBalance: (userId: string) => api.get(`/admin/users/${userId}/balance`),
   
-  // Countries
   getCountries: () => api.get('/admin/countries'),
   assignCountries: (userId: string, countryCodes: string[]) => 
     api.post(`/admin/users/${userId}/countries`, { countryCodes }),
@@ -73,7 +69,6 @@ export const adminApi = {
     api.delete(`/admin/users/${userId}/countries/${countryCode}`),
   getUserCountries: (userId: string) => api.get(`/admin/users/${userId}/countries`),
   
-  // Channels
   getChannels: () => api.get('/admin/channels'),
   createChannel: (data: any) => api.post('/admin/channels', data),
   updateChannel: (accountId: string, data: any) => api.put(`/admin/channels/${accountId}`, data),
@@ -86,27 +81,33 @@ export const adminApi = {
   getChannelStats: (accountId: string) => api.get(`/admin/channels/${accountId}/stats`),
   getAllChannelsStats: () => api.get('/admin/channels/stats'),
   
-  // Batch operations
+  addChannelSession: (accountId: string) => api.post(`/admin/channels/${accountId}/sessions/add`),
+  removeChannelSession: (accountId: string) => api.post(`/admin/channels/${accountId}/sessions/remove`),
+  getChannelSessions: (accountId: string) => api.get(`/admin/channels/${accountId}/sessions`),
+  
   batchEnableChannels: (accountIds: string[]) => 
     api.post('/admin/channels/batch/enable', { accountIds }),
   batchDisableChannels: (accountIds: string[]) => 
     api.post('/admin/channels/batch/disable', { accountIds }),
+  batchUpdateTps: (updates: Array<{ accountId: string; maxTps?: number; maxSessions?: number }>) =>
+    api.put('/admin/channels/batch/tps', { updates }),
   batchEnableUsers: (userIds: string[]) => 
     api.post('/admin/users/batch/enable', { userIds }),
   batchDisableUsers: (userIds: string[]) => 
     api.post('/admin/users/batch/disable', { userIds }),
+  batchAssignCountries: (userIds: string[], countryCodes: string[]) =>
+    api.post('/admin/users/batch/countries', { userIds, countryCodes }),
+  batchAssignChannels: (userIds: string[], channels: Array<{ accountId: string; maxTps: number }>) =>
+    api.post('/admin/users/batch/channels', { userIds, channels }),
   
-  // Alerts
   getAlerts: (params?: { accountId?: string; unresolvedOnly?: boolean; limit?: number }) => 
     api.get('/admin/alerts', { params }),
   resolveAlert: (alertId: string) => api.post(`/admin/alerts/${alertId}/resolve`),
   resolveChannelAlerts: (accountId: string, alertType: string) => 
     api.post(`/admin/channels/${accountId}/alerts/resolve`, { alertType }),
   
-  // Health
   getSystemHealth: () => api.get('/admin/health'),
   
-  // Webhook
   getWebhookConfig: () => api.get('/admin/webhook/config'),
   configureWebhook: (data: { url: string; headers?: Record<string, string>; enabled?: boolean }) => 
     api.post('/admin/webhook/config', data),
