@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using SmppClient.Core;
@@ -56,39 +57,33 @@ public class Session : IDisposable
 
     private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
     {
-        var buffer = new byte[65536];
-        var headerBuffer = new byte[16];
-        var bodyBuffer = new byte[65520];
+        byte[]? headerBuffer = null;
+        byte[]? bodyBuffer = null;
+        byte[]? pduData = null;
 
         try
         {
+            headerBuffer = ArrayPool<byte>.Shared.Rent(16);
+            bodyBuffer = ArrayPool<byte>.Shared.Rent(65520);
+
             while (!cancellationToken.IsCancellationRequested && _stream != null)
             {
-                var bytesRead = await _stream.ReadAsync(headerBuffer.AsMemory(0, 16), cancellationToken);
-                if (bytesRead == 0)
+                int totalRead = 0;
+
+                while (totalRead < 16)
                 {
-                    HandleConnectionLost();
-                    break;
-                }
-
-                if (bytesRead < 16)
-                    continue;
-
-                using var ms = new MemoryStream();
-                ms.Write(headerBuffer, 0, bytesRead);
-
-                while (ms.Position < 16)
-                {
-                    bytesRead = await _stream.ReadAsync(headerBuffer.AsMemory(0, 16 - (int)ms.Position), cancellationToken);
+                    var bytesRead = await _stream.ReadAsync(
+                        bodyBuffer.AsMemory(totalRead, 16 - totalRead), 
+                        cancellationToken);
                     if (bytesRead == 0)
                     {
                         HandleConnectionLost();
                         return;
                     }
-                    ms.Write(headerBuffer, 0, bytesRead);
+                    totalRead += bytesRead;
                 }
 
-                var commandLength = BitConverter.ToUInt32(headerBuffer, 0);
+                var commandLength = BitConverter.ToUInt32(bodyBuffer, 0);
                 if (commandLength > 65536 || commandLength < 16)
                 {
                     _logger.LogWarning("Invalid command length: {Length}", commandLength);
@@ -98,23 +93,24 @@ public class Session : IDisposable
                 var bodyLength = (int)commandLength - 16;
                 if (bodyLength > 0)
                 {
-                    var totalRead = 0;
-                    while (totalRead < bodyLength)
+                    var offset = 16;
+                    while (offset < commandLength)
                     {
-                        bytesRead = await _stream.ReadAsync(bodyBuffer.AsMemory(totalRead, bodyLength - totalRead), cancellationToken);
+                        var bytesToRead = Math.Min(bodyLength - (offset - 16), 65520);
+                        var bytesRead = await _stream.ReadAsync(
+                            bodyBuffer.AsMemory(offset, bytesToRead), 
+                            cancellationToken);
                         if (bytesRead == 0)
                         {
                             HandleConnectionLost();
                             return;
                         }
-                        totalRead += bytesRead;
+                        offset += bytesRead;
                     }
                 }
 
-                var pduData = new byte[commandLength];
-                Buffer.BlockCopy(headerBuffer, 0, pduData, 0, 16);
-                if (bodyLength > 0)
-                    Buffer.BlockCopy(bodyBuffer, 0, pduData, 16, bodyLength);
+                pduData = ArrayPool<byte>.Shared.Rent((int)commandLength);
+                Buffer.BlockCopy(bodyBuffer, 0, pduData, 0, (int)commandLength);
 
                 var pdu = _codec.Decode(pduData);
                 await HandlePduAsync(pdu);
@@ -127,6 +123,15 @@ public class Session : IDisposable
         {
             _logger.LogError(ex, "Receive loop error");
             HandleConnectionLost();
+        }
+        finally
+        {
+            if (headerBuffer != null)
+                ArrayPool<byte>.Shared.Return(headerBuffer);
+            if (bodyBuffer != null)
+                ArrayPool<byte>.Shared.Return(bodyBuffer);
+            if (pduData != null)
+                ArrayPool<byte>.Shared.Return(pduData);
         }
     }
 

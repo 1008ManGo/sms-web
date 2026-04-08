@@ -65,6 +65,7 @@ public interface IAccountRepository
     Task<IEnumerable<SmppAccountEntity>> GetEnabledAsync();
     Task<SmppAccountEntity> CreateAsync(SmppAccountEntity account);
     Task UpdateAsync(SmppAccountEntity account);
+    Task DeleteAsync(string accountId);
 }
 
 public class AccountRepository : IAccountRepository
@@ -100,8 +101,27 @@ public class AccountRepository : IAccountRepository
 
     public async Task UpdateAsync(SmppAccountEntity account)
     {
-        _context.Accounts.Update(account);
         await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteAsync(string accountId)
+    {
+        var account = await _context.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
+        if (account != null)
+        {
+            _context.Accounts.Remove(account);
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    public async Task<SmppAccountEntity?> GetByIdAsync(Guid id)
+    {
+        return await _context.Accounts.FindAsync(id);
+    }
+
+    public async Task<bool> ExistsAsync(string accountId)
+    {
+        return await _context.Accounts.AnyAsync(a => a.AccountId == accountId);
     }
 }
 

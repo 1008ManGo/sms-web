@@ -25,7 +25,9 @@ public class ConnectionManager : IDisposable
     private readonly ILogger<ConnectionManager> _logger;
     private readonly object _lock = new();
 
+    private TcpClient? _tcpClient;
     private Session? _session;
+    private WindowManager? _windowManager;
     private bool _disposed;
     private Task? _enquireLinkTask;
     private CancellationTokenSource? _linkCts;
@@ -40,6 +42,10 @@ public class ConnectionManager : IDisposable
 
     public bool IsConnected => _session?.IsConnected ?? false;
     public bool IsBound => _session?.IsBound ?? false;
+    public TcpClient? TcpClient => _tcpClient;
+    public WindowManager? WindowManager => _windowManager;
+    public SequenceManager SequenceManager => _sequenceManager;
+    public PduCodec PduCodec => _codec;
 
     public event EventHandler<Exception>? ConnectionLost;
 
@@ -57,8 +63,9 @@ public class ConnectionManager : IDisposable
         try
         {
             await tcpClient.ConnectAsync(_config.Host, _config.Port, timeoutCts.Token);
+            _tcpClient = tcpClient;
 
-            var windowManager = new WindowManager(_config.WindowSize, 
+            _windowManager = new WindowManager(_config.WindowSize, 
                 LoggerFactory.Create(b => b.AddConsole()).CreateLogger<WindowManager>());
 
             _session = new Session(
@@ -66,7 +73,7 @@ public class ConnectionManager : IDisposable
                 tcpClient,
                 _codec,
                 _sequenceManager,
-                windowManager,
+                _windowManager,
                 LoggerFactory.Create(b => b.AddConsole()).CreateLogger<Session>());
 
             _session.ConnectionLost += (_, ex) => ConnectionLost?.Invoke(this, ex);
@@ -84,6 +91,20 @@ public class ConnectionManager : IDisposable
             tcpClient.Dispose();
             throw;
         }
+    }
+
+    public Session? CreateSession()
+    {
+        if (_tcpClient == null || _windowManager == null)
+            return null;
+
+        return new Session(
+            Guid.NewGuid().ToString(),
+            _tcpClient,
+            _codec,
+            _sequenceManager,
+            _windowManager,
+            LoggerFactory.Create(b => b.AddConsole()).CreateLogger<Session>());
     }
 
     private void StartEnquireLink()
