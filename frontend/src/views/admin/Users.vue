@@ -296,7 +296,7 @@ const assignChannels = (user: any) => {
 
 const doAssignChannels = async () => {
   try {
-    const channelAssignments = selectedChannelIds.value.map((id: string) => ({ accountId: id, maxTps: 100 })
+    const channelAssignments = selectedChannelIds.value.map((id: string) => ({ accountId: id, maxTps: 100 }))
     await adminApi.batchAssignChannels([currentUser.value.id], channelAssignments)
     ElMessage.success('通道分配成功')
     showChannelsDialog.value = false
