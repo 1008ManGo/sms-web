@@ -46,7 +46,7 @@ builder.Services.AddScoped<IDlrRecordService, DlrRecordService>();
 builder.Services.AddScoped<IAlertService, AlertService>();
 builder.Services.AddSingleton<IWebhookNotificationService, WebhookNotificationService>();
 
-builder.Services.AddSingleton<ISmppClientManager, SmppClientManager>();
+builder.Services.AddSingleton<SmppGateway.Services.ISmppClientManager, SmppGateway.Services.SmppClientManager>();
 
 builder.Services.AddSingleton<DlrEventHandler>();
 
@@ -114,7 +114,7 @@ using (var scope = app.Services.CreateScope())
     await dbContext.Database.EnsureCreatedAsync();
 }
 
-var smppClientManager = app.Services.GetRequiredService<ISmppClientManager>();
+var smppClientManager = app.Services.GetRequiredService<SmppGateway.Services.SmppClientManager>();
 var alertService = app.Services.GetRequiredService<IAlertService>();
 smppClientManager.SetAlertService(alertService);
 await smppClientManager.StartAsync();

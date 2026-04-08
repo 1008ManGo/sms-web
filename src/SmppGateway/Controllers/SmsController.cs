@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmppClient.Protocol;
+using SmppClient.Services;
 using SmppGateway.Models;
 using SmppGateway.Services;
 using SmppStorage.Entities;
@@ -305,6 +306,6 @@ public class SmsController : ControllerBase
             .Select(c => new { c!.CountryCode, c.Name, c.Prefix })
             .OrderBy(c => c.CountryCode);
 
-        return ApiResponse<object>.Success(countries);
+        return Ok(ApiResponse<object>.Success(countries));
     }
 }

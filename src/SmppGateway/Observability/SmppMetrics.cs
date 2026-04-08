@@ -95,12 +95,12 @@ public class SmppMetrics
 public class MetricsCollector
 {
     private readonly Timer _collectionTimer;
-    private readonly ISmppClientManager _smppClientManager;
+    private readonly Services.ISmppClientManager _smppClientManager;
     private readonly SlaTracker _slaTracker;
     private readonly Dictionary<string, DateTime> _channelLastHeartbeat = new();
     private readonly object _lock = new();
 
-    public MetricsCollector(ISmppClientManager smppClientManager)
+    public MetricsCollector(Services.ISmppClientManager smppClientManager)
     {
         _smppClientManager = smppClientManager;
         _slaTracker = new SlaTracker();
@@ -165,7 +165,7 @@ public class MetricsCollector
             var (systemSuccessRate, systemP99) = _slaTracker.GetSystemSla();
             SmppMetrics.SystemSubmitSuccessRate.Set(systemSuccessRate);
 
-            var systemAvailability = allPools.Count > 0
+            var systemAvailability = allPools.Count() > 0
                 ? (healthySessions / (double)Math.Max(totalSessions, 1)) * 100
                 : 0;
             SmppMetrics.SystemAvailability.Set(systemAvailability);
@@ -225,7 +225,7 @@ public class MetricsCollector
 
     public void RecordBillingDeduction(string userId, decimal amount)
     {
-        SmppMetrics.BillingDeductionTotal.WithLabels(userId).Inc(amount);
+        SmppMetrics.BillingDeductionTotal.WithLabels(userId).Inc((double)amount);
     }
 
     public void RecordBillingCharge(string countryCode)

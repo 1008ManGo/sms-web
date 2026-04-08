@@ -7,6 +7,7 @@ public class User
     public string ApiKey { get; set; } = string.Empty;
     public decimal Balance { get; set; }
     public UserStatus Status { get; set; }
+    public UserRole Role { get; set; } = UserRole.User;
     public DateTime CreatedAt { get; set; }
 }
 
@@ -15,6 +16,12 @@ public enum UserStatus
     Active,
     Suspended,
     Deleted
+}
+
+public enum UserRole
+{
+    User,
+    Admin
 }
 
 public class UserRegisterRequest

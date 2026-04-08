@@ -295,7 +295,7 @@ public class AdminController : ControllerBase
             return BadRequest(ApiResponse.Fail(1, "AccountId and Host are required"));
         }
 
-        if (await _accountRepository.ExistsAsync(request.AccountId))
+        if (await _accountRepository.GetByAccountIdAsync(request.AccountId) != null)
         {
             return BadRequest(ApiResponse.Fail(1, "Channel already exists"));
         }
@@ -352,7 +352,7 @@ public class AdminController : ControllerBase
         if (request.SystemId != null) account.SystemId = request.SystemId;
         if (request.Password != null) account.Password = request.Password;
         if (request.Weight.HasValue) account.Weight = request.Weight.Value;
-        if (request.Priority.HasValue) account.Priority = request.Priority;
+        if (request.Priority.HasValue) account.Priority = request.Priority.Value;
         if (request.MaxTps.HasValue) account.MaxTps = request.MaxTps.Value;
         if (request.MaxSessions.HasValue) account.MaxSessions = request.MaxSessions.Value;
 

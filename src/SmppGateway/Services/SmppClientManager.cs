@@ -25,7 +25,7 @@ public interface ISmppClientManager
     Dictionary<string, List<string>> GetAccountSessions();
 }
 
-public class SmppClientManager : ISmppClientManager, IDisposable
+public class SmppClientManager : Configuration.ISmppClientManager, Services.ISmppClientManager, IDisposable
 {
     private readonly AppConfig _config;
     private readonly ILogger<SmppClientManager> _logger;
@@ -35,7 +35,7 @@ public class SmppClientManager : ISmppClientManager, IDisposable
     private readonly SubmitService _submitService;
     private readonly IQueueAdapter _queueAdapter;
     private readonly Dictionary<string, List<ConnectionManager>> _accountConnections = new();
-    private readonly Dictionary<string, SmppAccount> _accountConfigs = new();
+    private readonly Dictionary<string, SmppAccountConfig> _accountConfigs = new();
     private readonly object _lock = new();
     private IAlertService? _alertService;
     private bool _disposed;
@@ -95,7 +95,7 @@ public class SmppClientManager : ISmppClientManager, IDisposable
 
             for (int i = 0; i < accountConfig.MaxSessions; i++)
             {
-                await CreateConnectionAsync(accountConfig, accountConfig.Id);
+                await CreateConnectionAsync(smppAccount, accountConfig.Id);
             }
         }
 
@@ -157,9 +157,10 @@ public class SmppClientManager : ISmppClientManager, IDisposable
 
     public async Task<bool> AddSessionAsync(string accountId)
     {
+        SmppAccountConfig? accountConfig;
         lock (_lock)
         {
-            if (!_accountConfigs.TryGetValue(accountId, out var accountConfig))
+            if (!_accountConfigs.TryGetValue(accountId, out accountConfig))
             {
                 _logger.LogWarning("Account {AccountId} not found", accountId);
                 return false;
@@ -176,7 +177,21 @@ public class SmppClientManager : ISmppClientManager, IDisposable
             }
         }
 
-        await CreateConnectionAsync(accountConfig, accountId);
+        var smppAccount = new SmppAccount
+        {
+            Id = accountConfig.Id,
+            Name = accountConfig.Name,
+            Host = accountConfig.Host,
+            Port = accountConfig.Port,
+            SystemId = accountConfig.SystemId,
+            Password = accountConfig.Password,
+            SystemType = accountConfig.SystemType,
+            Weight = accountConfig.Weight,
+            Priority = accountConfig.Priority,
+            MaxTps = accountConfig.MaxTps,
+            MaxSessions = accountConfig.MaxSessions
+        };
+        await CreateConnectionAsync(smppAccount, accountId);
         return true;
     }
 
@@ -217,7 +232,7 @@ public class SmppClientManager : ISmppClientManager, IDisposable
             ? conns.Count(s => s.IsConnected) 
             : 0;
 
-        _accountConfigs[accountId] = new AccountConfig
+        _accountConfigs[accountId] = new SmppAccountConfig
         {
             Id = accountConfig.Id,
             Name = accountConfig.Name,
@@ -235,9 +250,24 @@ public class SmppClientManager : ISmppClientManager, IDisposable
 
         if (newMaxSessions > currentSessions)
         {
+            var config = _accountConfigs[accountId];
+            var smppAccount = new SmppAccount
+            {
+                Id = config.Id,
+                Name = config.Name,
+                Host = config.Host,
+                Port = config.Port,
+                SystemId = config.SystemId,
+                Password = config.Password,
+                SystemType = config.SystemType,
+                Weight = config.Weight,
+                Priority = config.Priority,
+                MaxTps = config.MaxTps,
+                MaxSessions = config.MaxSessions
+            };
             for (int i = 0; i < newMaxSessions - currentSessions; i++)
             {
-                await CreateConnectionAsync(_accountConfigs[accountId], accountId);
+                await CreateConnectionAsync(smppAccount, accountId);
             }
             _logger.LogInformation("Increased sessions for {AccountId} from {Old} to {New}", 
                 accountId, currentSessions, newMaxSessions);
@@ -264,7 +294,7 @@ public class SmppClientManager : ISmppClientManager, IDisposable
             return false;
         }
 
-        _accountConfigs[accountId] = new AccountConfig
+        _accountConfigs[accountId] = new SmppAccountConfig
         {
             Id = accountConfig.Id,
             Name = accountConfig.Name,

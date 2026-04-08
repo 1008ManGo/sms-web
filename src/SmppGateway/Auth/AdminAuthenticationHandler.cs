@@ -48,12 +48,12 @@ public class AdminAuthenticationHandler : AuthenticationHandler<AdminAuthenticat
             return AuthenticateResult.Fail("Invalid API Key");
         }
 
-        if (user.Status != UserStatus.Active)
+        if (user.Status != Models.UserStatus.Active)
         {
             return AuthenticateResult.Fail("User is not active");
         }
 
-        if (user.Role != UserRole.Admin)
+        if (user.Role != Models.UserRole.Admin)
         {
             return AuthenticateResult.Fail("Admin access required");
         }
