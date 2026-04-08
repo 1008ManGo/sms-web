@@ -77,7 +77,7 @@ public class SmppAccountEntity
 
     public int Weight { get; set; } = 100;
     public int Priority { get; set; } = 1;
-    public int MaxTps { get; set; } = 100;
+    public int MaxTps { get; set; } = 50;
     public int MaxSessions { get; set; } = 1;
     public bool Enabled { get; set; } = true;
 

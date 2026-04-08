@@ -42,6 +42,8 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<ISubmitRecordService, SubmitRecordService>();
 builder.Services.AddScoped<IDlrRecordService, DlrRecordService>();
 
+builder.Services.AddScoped<IAlertService, AlertService>();
+
 builder.Services.AddSingleton<ISmppClientManager, SmppClientManager>();
 
 builder.Services.AddSingleton<DlrEventHandler>();
@@ -108,6 +110,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 var smppClientManager = app.Services.GetRequiredService<ISmppClientManager>();
+var alertService = app.Services.GetRequiredService<IAlertService>();
+smppClientManager.SetAlertService(alertService);
 await smppClientManager.StartAsync();
 
 var metricsCollector = app.Services.GetRequiredService<MetricsCollector>();
