@@ -1074,7 +1074,7 @@ public class AdminController : ControllerBase
                     continue;
                 }
 
-                user.Status = Models.UserStatus.Active;
+                                user.Status = (SmppStorage.Entities.UserStatus)Models.UserStatus.Active;
                 await _userRepository.UpdateAsync(user);
                 result.SuccessCount++;
                 result.SuccessItems.Add(userId.ToString());
@@ -1107,7 +1107,7 @@ public class AdminController : ControllerBase
                     continue;
                 }
 
-                user.Status = Models.UserStatus.Suspended;
+                user.Status = (SmppStorage.Entities.UserStatus)Models.UserStatus.Suspended;
                 await _userRepository.UpdateAsync(user);
                 result.SuccessCount++;
                 result.SuccessItems.Add(userId.ToString());

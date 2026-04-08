@@ -83,11 +83,9 @@ public class DbUserService : IUserService
             Id = entity.Id,
             Username = entity.Username,
             ApiKey = entity.ApiKey,
-            PasswordHash = entity.PasswordHash,
             Balance = entity.Balance,
-            Status = entity.Status,
-            CreatedAt = entity.CreatedAt,
-            UpdatedAt = entity.UpdatedAt
+            Status = (Models.UserStatus)entity.Status,
+            CreatedAt = entity.CreatedAt
         };
     }
 
