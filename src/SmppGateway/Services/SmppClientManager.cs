@@ -34,7 +34,7 @@ public class SmppClientManager : ISmppClientManager, IDisposable
     private readonly SubmitService _submitService;
     private readonly IQueueAdapter _queueAdapter;
     private readonly Dictionary<string, List<ConnectionManager>> _accountConnections = new();
-    private readonly Dictionary<string, AccountConfig> _accountConfigs = new();
+    private readonly Dictionary<string, SmppAccount> _accountConfigs = new();
     private readonly object _lock = new();
     private IAlertService? _alertService;
     private bool _disposed;
@@ -102,7 +102,7 @@ public class SmppClientManager : ISmppClientManager, IDisposable
         _logger.LogInformation("SMPP Client Manager started");
     }
 
-    private async Task CreateConnectionAsync(AccountConfig accountConfig, string? specificAccountId = null)
+    private async Task CreateConnectionAsync(SmppClient.Routing.SmppAccount accountConfig, string? specificAccountId = null)
     {
         var accountId = specificAccountId ?? accountConfig.Id;
         var connectionConfig = new ConnectionConfig
@@ -340,7 +340,7 @@ public class SmppClientManager : ISmppClientManager, IDisposable
         _logger.LogError("Failed to reconnect after {MaxRetries} attempts", maxRetries);
     }
 
-    private Connection.Session CreateSessionFromConnection(ConnectionManager connectionManager)
+    private Session CreateSessionFromConnection(ConnectionManager connectionManager)
     {
         var session = connectionManager.CreateSession();
         if (session == null)

@@ -9,12 +9,12 @@ namespace SmppGateway.Controllers;
 [Route("api/v1")]
 public class HealthController : ControllerBase
 {
-    private readonly ISmppClientManager _smppClientManager;
+    private readonly Services.ISmppClientManager _smppClientManager;
     private readonly HealthCheckService _healthCheckService;
     private readonly ILogger<HealthController> _logger;
 
     public HealthController(
-        ISmppClientManager smppClientManager,
+        Services.ISmppClientManager smppClientManager,
         HealthCheckService healthCheckService,
         ILogger<HealthController> logger)
     {

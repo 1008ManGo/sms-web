@@ -21,7 +21,7 @@ public class AdminController : ControllerBase
     private readonly IAccountRepository _accountRepository;
     private readonly IBillingService _billingService;
     private readonly IAuditLogRepository _auditLogRepository;
-    private readonly ISmppClientManager _smppClientManager;
+    private readonly Services.ISmppClientManager _smppClientManager;
     private readonly IAlertService _alertService;
     private readonly IWebhookNotificationService? _webhookService;
     private readonly ILogger<AdminController> _logger;
@@ -32,7 +32,7 @@ public class AdminController : ControllerBase
         IAccountRepository accountRepository,
         IBillingService billingService,
         IAuditLogRepository auditLogRepository,
-        ISmppClientManager smppClientManager,
+        Services.ISmppClientManager smppClientManager,
         IAlertService alertService,
         IWebhookNotificationService? webhookService,
         ILogger<AdminController> logger)

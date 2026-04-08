@@ -15,7 +15,7 @@ public interface IDlrRecordService
         string mobile,
         string content);
 
-    Task UpdateDlrStatusAsync(string messageId, DlrStatus status, DateTime dlrTime, string? errorCode = null, string? networkErrorCode = null);
+    Task UpdateDlrStatusAsync(string messageId, Entities.DlrStatus status, DateTime dlrTime, string? errorCode = null, string? networkErrorCode = null);
 
     Task<DlrRecordEntity?> GetDlrByMessageIdAsync(string messageId);
 
@@ -55,7 +55,7 @@ public class DlrRecordService : IDlrRecordService
             LocalId = localId,
             Mobile = mobile,
             Content = content,
-            Status = DlrStatus.Pending,
+            Status = Entities.DlrStatus.Pending,
             SubmitTime = DateTime.UtcNow,
             UserId = userId
         };
@@ -67,7 +67,7 @@ public class DlrRecordService : IDlrRecordService
         return dlr;
     }
 
-    public async Task UpdateDlrStatusAsync(string messageId, DlrStatus status, DateTime dlrTime, string? errorCode = null, string? networkErrorCode = null)
+    public async Task UpdateDlrStatusAsync(string messageId, Entities.DlrStatus status, DateTime dlrTime, string? errorCode = null, string? networkErrorCode = null)
     {
         var dlr = await _context.DlrRecords.FirstOrDefaultAsync(d => d.MessageId == messageId);
         if (dlr != null)
@@ -99,6 +99,6 @@ public class DlrRecordService : IDlrRecordService
 
     public async Task<int> GetPendingDlrCountAsync()
     {
-        return await _context.DlrRecords.CountAsync(d => d.Status == DlrStatus.Pending);
+        return await _context.DlrRecords.CountAsync(d => d.Status == Entities.DlrStatus.Pending);
     }
 }

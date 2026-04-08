@@ -63,28 +63,99 @@ public class PduCodec
         };
     }
 
-    private int EncodeBindPdu(BindTransceiverPdu p, Span<byte> buffer)
+    private int EncodeBindPdu(Pdu p, Span<byte> buffer)
     {
         var offset = 0;
-        offset += EncodeCString(p.ServiceType, 6, buffer[offset..]);
-        offset += EncodeCString(p.Password, 16, buffer[offset..]);
-        offset += EncodeCString(p.SystemType, 13, buffer[offset..]);
-        buffer[offset++] = (byte)p.InterfaceVersion;
-        buffer[offset++] = (byte)p.AddressTon;
-        buffer[offset++] = (byte)p.AddressNpi;
-        offset += EncodeCString(p.AddressRange, 41, buffer[offset..]);
+        offset += EncodeCString(GetServiceType(p), 6, buffer[offset..]);
+        offset += EncodeCString(GetPassword(p), 16, buffer[offset..]);
+        offset += EncodeCString(GetSystemType(p), 13, buffer[offset..]);
+        buffer[offset++] = (byte)GetInterfaceVersion(p);
+        buffer[offset++] = (byte)GetAddressTon(p);
+        buffer[offset++] = (byte)GetAddressNpi(p);
+        offset += EncodeCString(GetAddressRange(p), 41, buffer[offset..]);
         return offset;
     }
 
-    private int EncodeBindRespPdu(BindTransceiverRespPdu p, Span<byte> buffer)
+    private string GetServiceType(Pdu p) => p switch
     {
-        var offset = EncodeCString(p.SystemId, 16, buffer);
-        if (!string.IsNullOrEmpty(p.ScInterfaceVersion))
-        {
-            offset += EncodeCString(p.ScInterfaceVersion, 6, buffer[offset..]);
-        }
+        BindTransmitterPdu bp => bp.SystemType,
+        BindReceiverPdu bp => bp.SystemType,
+        BindTransceiverPdu bp => bp.SystemType,
+        SubmitSmPdu sp => sp.ServiceType,
+        _ => string.Empty
+    };
+
+    private string GetPassword(Pdu p) => p switch
+    {
+        BindTransmitterPdu bp => bp.Password,
+        BindReceiverPdu bp => bp.Password,
+        BindTransceiverPdu bp => bp.Password,
+        _ => string.Empty
+    };
+
+    private string GetSystemType(Pdu p) => p switch
+    {
+        BindTransmitterPdu bp => bp.SystemType,
+        BindReceiverPdu bp => bp.SystemType,
+        BindTransceiverPdu bp => bp.SystemType,
+        _ => string.Empty
+    };
+
+    private Ton GetInterfaceVersion(Pdu p) => p switch
+    {
+        BindTransmitterPdu bp => bp.InterfaceVersion,
+        BindReceiverPdu bp => bp.InterfaceVersion,
+        BindTransceiverPdu bp => bp.InterfaceVersion,
+        _ => Ton.Unknown
+    };
+
+    private Ton GetAddressTon(Pdu p) => p switch
+    {
+        BindTransmitterPdu bp => bp.AddressTon,
+        BindReceiverPdu bp => bp.AddressTon,
+        BindTransceiverPdu bp => bp.AddressTon,
+        _ => Ton.Unknown
+    };
+
+    private Npi GetAddressNpi(Pdu p) => p switch
+    {
+        BindTransmitterPdu bp => bp.AddressNpi,
+        BindReceiverPdu bp => bp.AddressNpi,
+        BindTransceiverPdu bp => bp.AddressNpi,
+        _ => Npi.Unknown
+    };
+
+    private string GetAddressRange(Pdu p) => p switch
+    {
+        BindTransmitterPdu bp => bp.AddressRange,
+        BindReceiverPdu bp => bp.AddressRange,
+        BindTransceiverPdu bp => bp.AddressRange,
+        _ => string.Empty
+    };
+
+    private int EncodeBindRespPdu(Pdu p, Span<byte> buffer)
+    {
+        var offset = 0;
+        offset += EncodeCString(GetRespSystemId(p), 16, buffer[offset..]);
+        offset += EncodeCString(GetScInterfaceVersion(p), 4, buffer[offset..]);
         return offset;
     }
+
+    private string GetRespSystemId(Pdu p) => p switch
+    {
+        BindTransmitterRespPdu bp => bp.SystemId,
+        BindReceiverRespPdu bp => bp.SystemId,
+        BindTransceiverRespPdu bp => bp.SystemId,
+        _ => string.Empty
+    };
+
+    private string GetScInterfaceVersion(Pdu p) => p switch
+    {
+        BindTransmitterRespPdu bp => bp.ScInterfaceVersion,
+        BindReceiverRespPdu bp => bp.ScInterfaceVersion,
+        BindTransceiverRespPdu bp => bp.ScInterfaceVersion,
+        _ => string.Empty
+    };
 
     private int EncodeSubmitSm(SubmitSmPdu p, Span<byte> buffer)
     {

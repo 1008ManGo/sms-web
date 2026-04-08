@@ -141,7 +141,7 @@ public class RabbitMqAdapter : IQueueAdapter
         var tcs = new TaskCompletionSource<SmsMessage?>();
         cancellationToken.Register(() => tcs.TrySetCanceled());
 
-        void Handler(object sender, BasicDeliverEventArgs ea)
+        AsyncEventHandler<BasicDeliverEventArgs> Handler = async (sender, ea) =>
         {
             try
             {
@@ -164,7 +164,8 @@ public class RabbitMqAdapter : IQueueAdapter
                 _logger.LogError(ex, "Error deserializing submit message");
                 tcs.TrySetResult(null);
             }
-        }
+            await Task.CompletedTask;
+        };
 
         _submitConsumer.Received += Handler;
 
@@ -187,7 +188,7 @@ public class RabbitMqAdapter : IQueueAdapter
         var tcs = new TaskCompletionSource<DlrMessage?>();
         cancellationToken.Register(() => tcs.TrySetCanceled());
 
-        void Handler(object sender, BasicDeliverEventArgs ea)
+        AsyncEventHandler<BasicDeliverEventArgs> DlrHandler = async (sender, ea) =>
         {
             try
             {
@@ -210,9 +211,10 @@ public class RabbitMqAdapter : IQueueAdapter
                 _logger.LogError(ex, "Error deserializing DLR message");
                 tcs.TrySetResult(null);
             }
-        }
+            await Task.CompletedTask;
+        };
 
-        _dlrConsumer.Received += Handler;
+        _dlrConsumer.Received += DlrHandler;
 
         try
         {
@@ -221,7 +223,7 @@ public class RabbitMqAdapter : IQueueAdapter
         }
         finally
         {
-            _dlrConsumer.Received -= Handler;
+            _dlrConsumer.Received -= DlrHandler;
         }
     }
 

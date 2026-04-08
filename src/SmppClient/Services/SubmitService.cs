@@ -96,7 +96,7 @@ public class SubmitService : IDisposable
 
             foreach (var segment in splitResult.Segments)
             {
-                var segmentResult = await SendSegmentAsync(session, request, segment, localId);
+                var segmentResult = await SendSegmentAsync(session, request, segment, localId, splitResult.UsedPayload);
                 results.Add(segmentResult);
 
                 if (!segmentResult.Success)
@@ -147,7 +147,8 @@ public class SubmitService : IDisposable
         Session session,
         SubmitRequest request,
         LongMessageProcessor.Segment segment,
-        string localId)
+        string localId,
+        bool usedPayload)
     {
         var submitSm = new SubmitSmPdu
         {
@@ -170,7 +171,7 @@ public class SubmitService : IDisposable
             submitSm.OptionalParameters.Add(new Tlv(TlvTag.SarSegmentSeqnum, new[] { (byte)segment.SegmentNumber }));
         }
 
-        if (segment.UsedPayload)
+        if (usedPayload)
         {
             submitSm.OptionalParameters.Add(new Tlv(TlvTag.MessagePayload, segment.Data));
             submitSm.ShortMessageLength = 0;

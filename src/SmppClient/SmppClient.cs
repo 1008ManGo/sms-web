@@ -12,7 +12,9 @@ public class SmppClient : IDisposable
 
     public SmppClient(ConnectionConfig config, ILogger<SmppClient> logger)
     {
-        _connectionManager = new ConnectionManager(config, logger);
+        var connectionLogger = logger as ILogger<ConnectionManager> ?? 
+            LoggerFactory.Create(b => b.AddConsole()).CreateLogger<ConnectionManager>();
+        _connectionManager = new ConnectionManager(config, connectionLogger);
         _logger = logger;
         _connectionManager.ConnectionLost += OnConnectionLost;
     }

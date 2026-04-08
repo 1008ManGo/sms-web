@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using SmppGateway.Auth;
+using SmppGateway.Models;
 
 namespace SmppGateway.Services;
 
@@ -25,7 +26,7 @@ public class InMemoryUserService : IUserService
             Username = "testuser",
             ApiKey = GenerateApiKey("testuser"),
             Balance = 10000m,
-            Status = Models.UserStatus.Active,
+            Status = UserStatus.Active,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -64,7 +65,7 @@ public class InMemoryUserService : IUserService
             ApiKey = GenerateApiKey(username),
             PasswordHash = HashPassword(password),
             Balance = 0m,
-            Status = Models.UserStatus.Active,
+            Status = UserStatus.Active,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -108,15 +109,4 @@ public class InMemoryUserService : IUserService
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(password));
         return Convert.ToHexString(bytes).ToLower();
     }
-}
-
-public class User
-{
-    public Guid Id { get; set; }
-    public string Username { get; set; } = string.Empty;
-    public string ApiKey { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
-    public decimal Balance { get; set; }
-    public Models.UserStatus Status { get; set; }
-    public DateTime CreatedAt { get; set; }
 }
