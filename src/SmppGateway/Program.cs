@@ -114,7 +114,7 @@ using (var scope = app.Services.CreateScope())
     await dbContext.Database.EnsureCreatedAsync();
 }
 
-var smppClientManager = app.Services.GetRequiredService<SmppGateway.Services.SmppClientManager>();
+var smppClientManager = app.Services.GetRequiredService<SmppGateway.Services.ISmppClientManager>();
 var alertService = app.Services.GetRequiredService<IAlertService>();
 smppClientManager.SetAlertService(alertService);
 await smppClientManager.StartAsync();

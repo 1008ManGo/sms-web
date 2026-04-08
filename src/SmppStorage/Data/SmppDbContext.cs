@@ -97,7 +97,7 @@ public class SmppDbContext : DbContext
         {
             Id = defaultUserId,
             Username = "testuser",
-            PasswordHash = "5e884898da28047d6fe8b15ed9c4e50e6ff2a0f9d4e6c4e6ff2a0f9d4e6c4e6ff",
+            PasswordHash = "5e884898da28047d6fe8b15ed9c4e50e6ff2a0f9d4e6c4e6ff2a0f9d4e6c4e6",
             ApiKey = "a1b2c3d4e5f678901234567890123456",
             Balance = 10000m,
             Status = UserStatus.Active,

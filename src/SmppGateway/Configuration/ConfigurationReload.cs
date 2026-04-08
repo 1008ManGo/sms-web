@@ -168,11 +168,11 @@ public interface IConfigChangeHandler
 
 public class AccountConfigChangeHandler : IConfigChangeHandler
 {
-    private readonly ISmppClientManager _clientManager;
+    private readonly Services.ISmppClientManager _clientManager;
     private readonly ILogger<AccountConfigChangeHandler> _logger;
 
     public AccountConfigChangeHandler(
-        ISmppClientManager clientManager,
+        Services.ISmppClientManager clientManager,
         ILogger<AccountConfigChangeHandler> logger)
     {
         _clientManager = clientManager;

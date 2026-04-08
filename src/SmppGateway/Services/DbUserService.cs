@@ -85,6 +85,7 @@ public class DbUserService : IUserService
             ApiKey = entity.ApiKey,
             Balance = entity.Balance,
             Status = (Models.UserStatus)entity.Status,
+            Role = (Models.UserRole)entity.Role,
             CreatedAt = entity.CreatedAt
         };
     }
