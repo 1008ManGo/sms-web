@@ -847,7 +847,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpGet("alerts")]
-    public async Task<IActionResult> GetAlerts([FromQuery] string? accountId = null, [FromQuery] bool unresolvedOnly = false)
+    public async Task<IActionResult> GetAlerts([FromQuery] string? accountId = null, [FromQuery] bool unresolvedOnly = false, [FromQuery] int limit = 100)
     {
         if (unresolvedOnly)
         {
@@ -857,11 +857,11 @@ public class AdminController : ControllerBase
 
         if (!string.IsNullOrEmpty(accountId))
         {
-            var alerts = await _alertService.GetAlertsByAccountAsync(accountId);
+            var alerts = await _alertService.GetAlertsByAccountAsync(accountId, limit);
             return Ok(ApiResponse<List<AlertEntity>>.Success(alerts));
         }
 
-        var allAlerts = await _alertService.GetUnresolvedAlertsAsync();
+        var allAlerts = await _alertService.GetAllAlertsAsync(limit);
         return Ok(ApiResponse<List<AlertEntity>>.Success(allAlerts));
     }
 

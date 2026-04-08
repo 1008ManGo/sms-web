@@ -165,3 +165,91 @@ public class AuditLogRepository : IAuditLogRepository
             .ToListAsync();
     }
 }
+
+public interface IAlertRepository
+{
+    Task<AlertEntity> CreateAsync(AlertEntity alert);
+    Task<AlertEntity?> GetByIdAsync(Guid id);
+    Task<List<AlertEntity>> GetUnresolvedAsync();
+    Task<List<AlertEntity>> GetByAccountIdAsync(string accountId, int limit = 100);
+    Task<List<AlertEntity>> GetAllAsync(int limit = 100);
+    Task ResolveAsync(Guid id);
+    Task ResolveByAccountAsync(string accountId, AlertType? type = null);
+}
+
+public class AlertRepository : IAlertRepository
+{
+    private readonly SmppDbContext _context;
+
+    public AlertRepository(SmppDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<AlertEntity> CreateAsync(AlertEntity alert)
+    {
+        _context.Alerts.Add(alert);
+        await _context.SaveChangesAsync();
+        return alert;
+    }
+
+    public async Task<AlertEntity?> GetByIdAsync(Guid id)
+    {
+        return await _context.Alerts.FindAsync(id);
+    }
+
+    public async Task<List<AlertEntity>> GetUnresolvedAsync()
+    {
+        return await _context.Alerts
+            .Where(a => !a.IsResolved)
+            .OrderByDescending(a => a.CreatedAt)
+            .ThenByDescending(a => a.Severity)
+            .ToListAsync();
+    }
+
+    public async Task<List<AlertEntity>> GetByAccountIdAsync(string accountId, int limit = 100)
+    {
+        return await _context.Alerts
+            .Where(a => a.AccountId == accountId)
+            .OrderByDescending(a => a.CreatedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task<List<AlertEntity>> GetAllAsync(int limit = 100)
+    {
+        return await _context.Alerts
+            .OrderByDescending(a => a.CreatedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task ResolveAsync(Guid id)
+    {
+        var alert = await _context.Alerts.FindAsync(id);
+        if (alert != null)
+        {
+            alert.IsResolved = true;
+            alert.ResolvedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    public async Task ResolveByAccountAsync(string accountId, AlertType? type = null)
+    {
+        var query = _context.Alerts.Where(a => a.AccountId == accountId && !a.IsResolved);
+        
+        if (type.HasValue)
+        {
+            query = query.Where(a => a.Type == type.Value);
+        }
+
+        var alerts = await query.ToListAsync();
+        foreach (var alert in alerts)
+        {
+            alert.IsResolved = true;
+            alert.ResolvedAt = DateTime.UtcNow;
+        }
+        await _context.SaveChangesAsync();
+    }
+}

@@ -205,6 +205,51 @@ public enum DlrStatus
     Unknown = 5
 }
 
+public enum AlertSeverity
+{
+    Info = 0,
+    Warning = 1,
+    Critical = 2
+}
+
+public enum AlertType
+{
+    ChannelUp = 0,
+    ChannelDown = 1,
+    HighLoad = 2,
+    QueueBacklog = 3,
+    ConnectionLost = 4,
+    ReconnectSuccess = 5,
+    ReconnectFailed = 6
+}
+
+public class AlertEntity
+{
+    [Key]
+    public Guid Id { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string AccountId { get; set; } = string.Empty;
+
+    public AlertType Type { get; set; }
+
+    public AlertSeverity Severity { get; set; }
+
+    [Required]
+    [MaxLength(500)]
+    public string Message { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? Details { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public bool IsResolved { get; set; } = false;
+
+    public DateTime? ResolvedAt { get; set; }
+}
+
 public class AuditLogEntity
 {
     [Key]
