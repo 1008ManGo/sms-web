@@ -192,6 +192,9 @@ public class DlrRecordEntity
 
     public Guid? UserId { get; set; }
 
+    [ForeignKey(nameof(UserId))]
+    public UserEntity? User { get; set; }
+
     public Guid? SmsSubmitId { get; set; }
 }
 

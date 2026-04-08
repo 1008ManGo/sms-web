@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using SmppClient.Protocol;
 
 namespace SmppClient.Services;

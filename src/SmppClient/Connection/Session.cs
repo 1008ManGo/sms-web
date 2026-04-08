@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
 using SmppClient.Core;
 using SmppClient.Protocol;
 

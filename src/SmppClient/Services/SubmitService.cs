@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using SmppClient.Protocol;
 using SmppClient.Queue;
 using SmppClient.Routing;
