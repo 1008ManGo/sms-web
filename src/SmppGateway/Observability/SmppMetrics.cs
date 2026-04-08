@@ -4,7 +4,7 @@ namespace SmppGateway.Observability;
 
 public class SmppMetrics
 {
-    public static readonly Counter ConnectedSessions = Prometheus.Metrics
+    public static readonly Gauge ConnectedSessions = Prometheus.Metrics
         .CreateGauge("smpp_connected_sessions", "Number of connected SMPP sessions");
 
     public static readonly Counter ReconnectTotal = Prometheus.Metrics
@@ -61,18 +61,53 @@ public class SmppMetrics
     public static readonly Counter BillingChargeTotal = Prometheus.Metrics
         .CreateCounter("smpp_billing_charge_total", "Total billing charges",
             new CounterConfiguration { LabelNames = new[] { "country_code" } });
+
+    public static readonly Gauge ChannelAvailability = Prometheus.Metrics
+        .CreateGauge("smpp_channel_availability", "Channel availability percentage",
+            new GaugeConfiguration { LabelNames = new[] { "account_id" } });
+
+    public static readonly Gauge SystemAvailability = Prometheus.Metrics
+        .CreateGauge("smpp_system_availability", "System-wide availability percentage");
+
+    public static readonly Counter SubmitLatencyTotal = Prometheus.Metrics
+        .CreateCounter("smpp_submit_latency_total", "Submit latency observations");
+
+    public static readonly Histogram SubmitLatencySeconds = Prometheus.Metrics
+        .CreateHistogram("smpp_submit_latency_seconds", "SMS submit latency in seconds",
+            new HistogramConfiguration
+            {
+                Buckets = new[] { 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0 },
+                LabelNames = new[] { "account_id" }
+            });
+
+    public static readonly Gauge SubmitSuccessRate = Prometheus.Metrics
+        .CreateGauge("smpp_submit_success_rate", "Submit success rate (last 5 min)",
+            new GaugeConfiguration { LabelNames = new[] { "account_id" } });
+
+    public static readonly Gauge SystemSubmitSuccessRate = Prometheus.Metrics
+        .CreateGauge("smpp_system_submit_success_rate", "System-wide submit success rate");
+
+    public static readonly Counter AlertTotal = Prometheus.Metrics
+        .CreateCounter("smpp_alert_total", "Total alerts generated",
+            new CounterConfiguration { LabelNames = new[] { "type", "severity" } });
 }
 
 public class MetricsCollector
 {
     private readonly Timer _collectionTimer;
     private readonly ISmppClientManager _smppClientManager;
+    private readonly SlaTracker _slaTracker;
+    private readonly Dictionary<string, DateTime> _channelLastHeartbeat = new();
+    private readonly object _lock = new();
 
     public MetricsCollector(ISmppClientManager smppClientManager)
     {
         _smppClientManager = smppClientManager;
+        _slaTracker = new SlaTracker();
         _collectionTimer = new Timer(CollectMetrics, null, TimeSpan.Zero, TimeSpan.FromSeconds(10));
     }
+
+    public SlaTracker SlaTracker => _slaTracker;
 
     private void CollectMetrics(object? state)
     {
@@ -81,21 +116,59 @@ public class MetricsCollector
             SmppMetrics.ConnectedSessions.Set(_smppClientManager.HealthySessions);
 
             var routeStrategy = _smppClientManager.GetRouteStrategy();
-            foreach (var pool in routeStrategy.GetAllPools())
-            {
-                var healthySessions = pool.SessionCount;
-                var totalSessions = pool.TotalSessionCount;
+            var allPools = routeStrategy.GetAllPools().ToList();
+            var totalSessions = 0;
+            var healthySessions = 0;
 
-                if (healthySessions > 0)
+            foreach (var pool in allPools)
+            {
+                totalSessions += pool.TotalSessionCount;
+                healthySessions += pool.SessionCount;
+
+                if (pool.SessionCount > 0)
                 {
                     var avgWindowUsage = pool.GetHealthySessions()
                         .Select(s => s.WindowManager.UsagePercentage)
                         .DefaultIfEmpty(0)
                         .Average();
 
-                    SmppMetrics.WindowUsage.Set(avgWindowUsage);
+                    SmppMetrics.WindowUsage.WithLabels(pool.AccountId).Set(avgWindowUsage);
+
+                    var availability = pool.SessionCount > 0 ? 100.0 : 0.0;
+                    SmppMetrics.ChannelAvailability.WithLabels(pool.AccountId).Set(availability);
+
+                    lock (_lock)
+                    {
+                        _channelLastHeartbeat[pool.AccountId] = DateTime.UtcNow;
+                    }
+
+                    var (successRate, p99, p95, p90) = _slaTracker.GetChannelSla(pool.AccountId);
+                    SmppMetrics.SubmitSuccessRate.WithLabels(pool.AccountId).Set(successRate);
+                }
+                else
+                {
+                    SmppMetrics.ChannelAvailability.WithLabels(pool.AccountId).Set(0);
                 }
             }
+
+            lock (_lock)
+            {
+                foreach (var channelId in _channelLastHeartbeat.Keys.ToList())
+                {
+                    if (!allPools.Any(p => p.AccountId == channelId))
+                    {
+                        _channelLastHeartbeat.Remove(channelId);
+                    }
+                }
+            }
+
+            var (systemSuccessRate, systemP99) = _slaTracker.GetSystemSla();
+            SmppMetrics.SystemSubmitSuccessRate.Set(systemSuccessRate);
+
+            var systemAvailability = allPools.Count > 0
+                ? (healthySessions / (double)Math.Max(totalSessions, 1)) * 100
+                : 0;
+            SmppMetrics.SystemAvailability.Set(systemAvailability);
 
             var queueAdapter = GetQueueAdapter();
             if (queueAdapter != null)
@@ -115,14 +188,17 @@ public class MetricsCollector
         return field?.GetValue(_smppClientManager) as IQueueAdapter;
     }
 
-    public void RecordSubmitSuccess(string accountId)
+    public void RecordSubmitSuccess(string accountId, double latencySeconds)
     {
         SmppMetrics.SubmitSuccessTotal.Inc();
+        SmppMetrics.SubmitLatencySeconds.WithLabels(accountId).Observe(latencySeconds);
+        _slaTracker.RecordSubmit(accountId, true, latencySeconds);
     }
 
-    public void RecordSubmitFail(string accountId, string errorCode)
+    public void RecordSubmitFail(string accountId, string errorCode, double latencySeconds)
     {
         SmppMetrics.SubmitFailTotal.Inc();
+        _slaTracker.RecordSubmit(accountId, false, latencySeconds);
     }
 
     public void RecordDlrReceived(double delaySeconds)
@@ -186,4 +262,137 @@ public interface IQueueAdapter
     Task InitializeAsync();
     int SubmitQueueLength { get; }
     int DlrQueueLength { get; }
+}
+
+public class SlaTracker
+{
+    private readonly Dictionary<string, ChannelSlaData> _channelData = new();
+    private readonly object _lock = new();
+    private readonly TimeSpan _windowSize = TimeSpan.FromMinutes(5);
+
+    public void RecordSubmit(string accountId, bool success, double latencySeconds)
+    {
+        lock (_lock)
+        {
+            if (!_channelData.TryGetValue(accountId, out var data))
+            {
+                data = new ChannelSlaData();
+                _channelData[accountId] = data;
+            }
+
+            data.RecordSubmit(success, latencySeconds);
+            CleanupOldData(data);
+        }
+    }
+
+    public void RecordAlert(string accountId, string alertType, string severity)
+    {
+        SmppMetrics.AlertTotal.WithLabels(alertType, severity).Inc();
+    }
+
+    public (double SuccessRate, double P99Latency, double P95Latency, double P90Latency) GetChannelSla(string accountId)
+    {
+        lock (_lock)
+        {
+            if (!_channelData.TryGetValue(accountId, out var data))
+                return (100.0, 0, 0, 0);
+
+            return data.GetMetrics();
+        }
+    }
+
+    public (double SuccessRate, double P99Latency) GetSystemSla()
+    {
+        lock (_lock)
+        {
+            if (_channelData.Count == 0)
+                return (100.0, 0);
+
+            var totalSuccess = 0.0;
+            var totalCount = 0;
+            var allLatencies = new List<double>();
+
+            foreach (var data in _channelData.Values)
+            {
+                totalSuccess += data.TotalSuccess;
+                totalCount += data.TotalCount;
+                allLatencies.AddRange(data.GetRecentLatencies());
+            }
+
+            if (totalCount == 0)
+                return (100.0, 0);
+
+            allLatencies.Sort();
+            var successRate = (totalSuccess / totalCount) * 100;
+            var p99Index = (int)(allLatencies.Count * 0.99);
+            var p99Latency = p99Index < allLatencies.Count ? allLatencies[p99Index] : 0;
+
+            return (successRate, p99Latency);
+        }
+    }
+
+    private void CleanupOldData(ChannelSlaData data)
+    {
+        var cutoff = DateTime.UtcNow - _windowSize;
+        data.RemoveOldEntries(cutoff);
+    }
+
+    private class ChannelSlaData
+    {
+        private readonly List<(DateTime Time, bool Success, double Latency)> _records = new();
+        private readonly object _lock = new();
+
+        public double TotalSuccess => _records.Count(r => r.Success);
+        public int TotalCount => _records.Count;
+
+        public void RecordSubmit(bool success, double latencySeconds)
+        {
+            lock (_lock)
+            {
+                _records.Add((DateTime.UtcNow, success, latencySeconds));
+            }
+        }
+
+        public List<double> GetRecentLatencies()
+        {
+            lock (_lock)
+            {
+                return _records.Select(r => r.Latency).ToList();
+            }
+        }
+
+        public (double SuccessRate, double P99Latency, double P95Latency, double P90Latency) GetMetrics()
+        {
+            lock (_lock)
+            {
+                if (_records.Count == 0)
+                    return (100.0, 0, 0, 0);
+
+                var successCount = _records.Count(r => r.Success);
+                var successRate = (successCount / (double)_records.Count) * 100;
+
+                var latencies = _records.Select(r => r.Latency).OrderBy(x => x).ToList();
+                var p99 = GetPercentile(latencies, 0.99);
+                var p95 = GetPercentile(latencies, 0.95);
+                var p90 = GetPercentile(latencies, 0.90);
+
+                return (successRate, p99, p95, p90);
+            }
+        }
+
+        public void RemoveOldEntries(DateTime cutoff)
+        {
+            lock (_lock)
+            {
+                _records.RemoveAll(r => r.Time < cutoff);
+            }
+        }
+
+        private static double GetPercentile(List<double> sorted, double percentile)
+        {
+            if (sorted.Count == 0) return 0;
+            var index = (int)Math.Ceiling(sorted.Count * percentile) - 1;
+            return sorted[Math.Max(0, Math.Min(index, sorted.Count - 1))];
+        }
+    }
 }

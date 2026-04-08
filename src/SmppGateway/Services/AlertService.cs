@@ -3,56 +3,12 @@ using SmppStorage.Repositories;
 
 namespace SmppGateway.Services;
 
-public enum AlertSeverity
-{
-    Info = 0,
-    Warning = 1,
-    Critical = 2
-}
-
-public enum AlertType
-{
-    ChannelUp = 0,
-    ChannelDown = 1,
-    HighLoad = 2,
-    QueueBacklog = 3,
-    ConnectionLost = 4,
-    ReconnectSuccess = 5,
-    ReconnectFailed = 6
-}
-
-public class AlertEntity
-{
-    [Key]
-    public Guid Id { get; set; }
-
-    [Required]
-    [MaxLength(100)]
-    public string AccountId { get; set; } = string.Empty;
-
-    public AlertType Type { get; set; }
-
-    public AlertSeverity Severity { get; set; }
-
-    [Required]
-    [MaxLength(500)]
-    public string Message { get; set; } = string.Empty;
-
-    [MaxLength(500)]
-    public string? Details { get; set; }
-
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-    public bool IsResolved { get; set; } = false;
-
-    public DateTime? ResolvedAt { get; set; }
-}
-
 public interface IAlertService
 {
     Task RecordAlertAsync(string accountId, AlertType type, AlertSeverity severity, string message, string? details = null);
     Task<List<AlertEntity>> GetUnresolvedAlertsAsync();
     Task<List<AlertEntity>> GetAlertsByAccountAsync(string accountId, int limit = 100);
+    Task<List<AlertEntity>> GetAllAlertsAsync(int limit = 100);
     Task ResolveAlertAsync(Guid alertId);
     Task ResolveAlertsByAccountAsync(string accountId, AlertType type);
     event EventHandler<AlertEntity>? AlertCreated;
@@ -60,15 +16,21 @@ public interface IAlertService
 
 public class AlertService : IAlertService
 {
+    private readonly IAlertRepository _alertRepository;
     private readonly IAuditLogRepository _auditLogRepository;
     private readonly ILogger<AlertService> _logger;
-    private readonly List<AlertEntity> _alerts = new();
+    private readonly List<AlertEntity> _cache = new();
     private readonly object _lock = new();
+    private const int MaxCacheSize = 1000;
 
     public event EventHandler<AlertEntity>? AlertCreated;
 
-    public AlertService(IAuditLogRepository auditLogRepository, ILogger<AlertService> logger)
+    public AlertService(
+        IAlertRepository alertRepository,
+        IAuditLogRepository auditLogRepository,
+        ILogger<AlertService> logger)
     {
+        _alertRepository = alertRepository;
         _auditLogRepository = auditLogRepository;
         _logger = logger;
     }
@@ -88,15 +50,17 @@ public class AlertService : IAlertService
 
         lock (_lock)
         {
-            _alerts.Add(alert);
-            if (_alerts.Count > 1000)
+            _cache.Add(alert);
+            if (_cache.Count > MaxCacheSize)
             {
-                _alerts.RemoveRange(0, _alerts.Count - 1000);
+                _cache.RemoveRange(0, _cache.Count - MaxCacheSize);
             }
         }
 
         try
         {
+            await _alertRepository.CreateAsync(alert);
+
             await _auditLogRepository.CreateAsync(new AuditLogEntity
             {
                 Id = Guid.NewGuid(),
@@ -109,7 +73,7 @@ public class AlertService : IAlertService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to record alert to audit log");
+            _logger.LogWarning(ex, "Failed to persist alert to database, using cache only");
         }
 
         AlertCreated?.Invoke(this, alert);
@@ -118,51 +82,101 @@ public class AlertService : IAlertService
             severity, type, accountId, message);
     }
 
-    public Task<List<AlertEntity>> GetUnresolvedAlertsAsync()
+    public async Task<List<AlertEntity>> GetUnresolvedAlertsAsync()
     {
-        lock (_lock)
+        try
         {
-            return Task.FromResult(_alerts.Where(a => !a.IsResolved)
-                .OrderByDescending(a => a.CreatedAt)
-                .ToList());
+            return await _alertRepository.GetUnresolvedAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get unresolved alerts from database, using cache");
+            lock (_lock)
+            {
+                return _cache.Where(a => !a.IsResolved)
+                    .OrderByDescending(a => a.CreatedAt)
+                    .ToList();
+            }
         }
     }
 
-    public Task<List<AlertEntity>> GetAlertsByAccountAsync(string accountId, int limit = 100)
+    public async Task<List<AlertEntity>> GetAlertsByAccountAsync(string accountId, int limit = 100)
     {
-        lock (_lock)
+        try
         {
-            return Task.FromResult(_alerts.Where(a => a.AccountId == accountId)
-                .OrderByDescending(a => a.CreatedAt)
-                .Take(limit)
-                .ToList());
+            return await _alertRepository.GetByAccountIdAsync(accountId, limit);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get alerts by account from database, using cache");
+            lock (_lock)
+            {
+                return _cache.Where(a => a.AccountId == accountId)
+                    .OrderByDescending(a => a.CreatedAt)
+                    .Take(limit)
+                    .ToList();
+            }
         }
     }
 
-    public Task ResolveAlertAsync(Guid alertId)
+    public async Task<List<AlertEntity>> GetAllAlertsAsync(int limit = 100)
+    {
+        try
+        {
+            return await _alertRepository.GetAllAsync(limit);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get all alerts from database, using cache");
+            lock (_lock)
+            {
+                return _cache.OrderByDescending(a => a.CreatedAt)
+                    .Take(limit)
+                    .ToList();
+            }
+        }
+    }
+
+    public async Task ResolveAlertAsync(Guid alertId)
     {
         lock (_lock)
         {
-            var alert = _alerts.FirstOrDefault(a => a.Id == alertId);
+            var alert = _cache.FirstOrDefault(a => a.Id == alertId);
             if (alert != null)
             {
                 alert.IsResolved = true;
                 alert.ResolvedAt = DateTime.UtcNow;
             }
         }
-        return Task.CompletedTask;
+
+        try
+        {
+            await _alertRepository.ResolveAsync(alertId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resolve alert in database");
+        }
     }
 
-    public Task ResolveAlertsByAccountAsync(string accountId, AlertType type)
+    public async Task ResolveAlertsByAccountAsync(string accountId, AlertType type)
     {
         lock (_lock)
         {
-            foreach (var alert in _alerts.Where(a => a.AccountId == accountId && a.Type == type && !a.IsResolved))
+            foreach (var alert in _cache.Where(a => a.AccountId == accountId && a.Type == type && !a.IsResolved))
             {
                 alert.IsResolved = true;
                 alert.ResolvedAt = DateTime.UtcNow;
             }
         }
-        return Task.CompletedTask;
+
+        try
+        {
+            await _alertRepository.ResolveByAccountAsync(accountId, type);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resolve alerts in database");
+        }
     }
 }

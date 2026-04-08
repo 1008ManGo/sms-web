@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace SmppClient.Protocol;
@@ -5,126 +6,144 @@ namespace SmppClient.Protocol;
 public class PduCodec
 {
     private const int HeaderLength = 16;
+    private const int DefaultBufferSize = 1024;
+    private const int MaxPduSize = 65536;
+
+    private static readonly ArrayPool<byte> BytePool = ArrayPool<byte>.Shared;
 
     public byte[] Encode(Pdu pdu)
     {
-        using var ms = new MemoryStream();
-        using var writer = new BinaryWriter(ms);
-
-        var bodyAndTlv = EncodeBody(pdu);
-        var commandLength = HeaderLength + bodyAndTlv.Length;
-
-        writer.Write(commandLength);
-        writer.Write((uint)pdu.CommandId);
-        writer.Write((uint)pdu.Status);
-        writer.Write(pdu.SequenceNumber);
-        writer.Write(bodyAndTlv);
-
-        return ms.ToArray();
+        var buffer = BytePool.Rent(DefaultBufferSize);
+        try
+        {
+            var length = EncodeToBuffer(pdu, buffer);
+            var result = new byte[length];
+            Buffer.BlockCopy(buffer, 0, result, 0, length);
+            return result;
+        }
+        finally
+        {
+            BytePool.Return(buffer);
+        }
     }
 
-    private byte[] EncodeBody(Pdu pdu)
+    public int EncodeToBuffer(Pdu pdu, byte[] buffer)
+    {
+        var bodyLength = EncodeBody(pdu, buffer.AsSpan(HeaderLength));
+        var totalLength = HeaderLength + bodyLength;
+
+        var span = buffer.AsSpan();
+        BitConverter.GetBytes(totalLength).CopyTo(span[0..4]);
+        BitConverter.GetBytes((uint)pdu.CommandId).CopyTo(span[4..8]);
+        BitConverter.GetBytes((uint)pdu.Status).CopyTo(span[8..12]);
+        BitConverter.GetBytes(pdu.SequenceNumber).CopyTo(span[12..16]);
+
+        return totalLength;
+    }
+
+    private int EncodeBody(Pdu pdu, Span<byte> buffer)
     {
         return pdu switch
         {
-            BindTransmitterPdu p => EncodeBindPdu(p),
-            BindTransmitterRespPdu p => EncodeBindRespPdu(p),
-            BindReceiverPdu p => EncodeBindPdu(p),
-            BindReceiverRespPdu p => EncodeBindRespPdu(p),
-            BindTransceiverPdu p => EncodeBindPdu(p),
-            BindTransceiverRespPdu p => EncodeBindRespPdu(p),
-            SubmitSmPdu p => EncodeSubmitSm(p),
-            SubmitSmRespPdu p => EncodeSubmitSmResp(p),
-            DeliverSmPdu p => EncodeDeliverSm(p),
-            DeliverSmRespPdu p => EncodeDeliverSmResp(p),
-            EnquireLinkPdu => Array.Empty<byte>(),
-            EnquireLinkRespPdu => Array.Empty<byte>(),
-            UnbindPdu => Array.Empty<byte>(),
-            UnbindRespPdu => Array.Empty<byte>(),
+            BindTransmitterPdu p => EncodeBindPdu(p, buffer),
+            BindTransmitterRespPdu p => EncodeBindRespPdu(p, buffer),
+            BindReceiverPdu p => EncodeBindPdu(p, buffer),
+            BindReceiverRespPdu p => EncodeBindRespPdu(p, buffer),
+            BindTransceiverPdu p => EncodeBindPdu(p, buffer),
+            BindTransceiverRespPdu p => EncodeBindRespPdu(p, buffer),
+            SubmitSmPdu p => EncodeSubmitSm(p, buffer),
+            SubmitSmRespPdu p => EncodeSubmitSmResp(p, buffer),
+            DeliverSmPdu p => EncodeDeliverSm(p, buffer),
+            DeliverSmRespPdu p => EncodeDeliverSmResp(p, buffer),
+            EnquireLinkPdu => 0,
+            EnquireLinkRespPdu => 0,
+            UnbindPdu => 0,
+            UnbindRespPdu => 0,
             _ => throw new NotSupportedException($"PDU type {pdu.GetType().Name} not supported")
         };
     }
 
-    private byte[] EncodeBindPdu(BindTransceiverPdu p)
+    private int EncodeBindPdu(BindTransceiverPdu p, Span<byte> buffer)
     {
-        var body = new List<byte>();
-        body.AddRange(EncodeCString(p.ServiceType, 6));
-        body.AddRange(EncodeCString(p.Password, 16));
-        body.AddRange(EncodeCString(p.SystemType, 13));
-        body.Add((byte)p.InterfaceVersion);
-        body.Add((byte)p.AddressTon);
-        body.Add((byte)p.AddressNpi);
-        body.AddRange(EncodeCString(p.AddressRange, 41));
-        return body.ToArray();
+        var offset = 0;
+        offset += EncodeCString(p.ServiceType, 6, buffer[offset..]);
+        offset += EncodeCString(p.Password, 16, buffer[offset..]);
+        offset += EncodeCString(p.SystemType, 13, buffer[offset..]);
+        buffer[offset++] = (byte)p.InterfaceVersion;
+        buffer[offset++] = (byte)p.AddressTon;
+        buffer[offset++] = (byte)p.AddressNpi;
+        offset += EncodeCString(p.AddressRange, 41, buffer[offset..]);
+        return offset;
     }
 
-    private byte[] EncodeBindRespPdu(BindTransceiverRespPdu p)
+    private int EncodeBindRespPdu(BindTransceiverRespPdu p, Span<byte> buffer)
     {
-        var body = new List<byte>();
-        body.AddRange(EncodeCString(p.SystemId, 16));
+        var offset = EncodeCString(p.SystemId, 16, buffer);
         if (!string.IsNullOrEmpty(p.ScInterfaceVersion))
         {
-            body.AddRange(EncodeCString(p.ScInterfaceVersion, 6));
+            offset += EncodeCString(p.ScInterfaceVersion, 6, buffer[offset..]);
         }
-        return body.ToArray();
+        return offset;
     }
 
-    private byte[] EncodeSubmitSm(SubmitSmPdu p)
+    private int EncodeSubmitSm(SubmitSmPdu p, Span<byte> buffer)
     {
-        var body = new List<byte>();
-        body.AddRange(EncodeCString(p.ServiceType, 6));
-        body.Add((byte)p.SourceAddrTon);
-        body.Add((byte)p.SourceAddrNpi);
-        body.AddRange(EncodeCString(p.SourceAddr, 65));
-        body.Add((byte)p.DestAddrTon);
-        body.Add((byte)p.DestAddrNpi);
-        body.AddRange(EncodeCString(p.DestinationAddr, 65));
-        body.Add(p.EsmClass);
-        body.Add(p.ProtocolId);
-        body.Add(p.PriorityFlag);
-        body.AddRange(EncodeCString(p.ScheduleDeliveryTime, 17));
-        body.AddRange(EncodeCString(p.ValidityPeriod, 17));
-        body.Add((byte)p.RegisteredDelivery);
-        body.Add((byte)p.ReplaceIfPresent);
-        body.Add((byte)p.DataCoding);
-        body.Add(p.DefaultMsgId);
-        body.Add(p.ShortMessageLength);
-        body.AddRange(p.ShortMessage);
-        return body.ToArray();
+        var offset = 0;
+        offset += EncodeCString(p.ServiceType, 6, buffer[offset..]);
+        buffer[offset++] = (byte)p.SourceAddrTon;
+        buffer[offset++] = (byte)p.SourceAddrNpi;
+        offset += EncodeCString(p.SourceAddr, 65, buffer[offset..]);
+        buffer[offset++] = (byte)p.DestAddrTon;
+        buffer[offset++] = (byte)p.DestAddrNpi;
+        offset += EncodeCString(p.DestinationAddr, 65, buffer[offset..]);
+        buffer[offset++] = p.EsmClass;
+        buffer[offset++] = p.ProtocolId;
+        buffer[offset++] = p.PriorityFlag;
+        offset += EncodeCString(p.ScheduleDeliveryTime, 17, buffer[offset..]);
+        offset += EncodeCString(p.ValidityPeriod, 17, buffer[offset..]);
+        buffer[offset++] = (byte)p.RegisteredDelivery;
+        buffer[offset++] = (byte)p.ReplaceIfPresent;
+        buffer[offset++] = (byte)p.DataCoding;
+        buffer[offset++] = p.DefaultMsgId;
+        buffer[offset++] = p.ShortMessageLength;
+        p.ShortMessage.CopyTo(buffer[offset..]);
+        offset += p.ShortMessage.Length;
+        return offset;
     }
 
-    private byte[] EncodeSubmitSmResp(SubmitSmRespPdu p)
+    private int EncodeSubmitSmResp(SubmitSmRespPdu p, Span<byte> buffer)
     {
-        return EncodeCString(p.MessageId, 65).ToArray();
+        return EncodeCString(p.MessageId, 65, buffer);
     }
 
-    private byte[] EncodeDeliverSm(DeliverSmPdu p)
+    private int EncodeDeliverSm(DeliverSmPdu p, Span<byte> buffer)
     {
-        var body = new List<byte>();
-        body.AddRange(EncodeCString(p.ServiceType, 6));
-        body.Add((byte)p.SourceAddrTon);
-        body.Add((byte)p.SourceAddrNpi);
-        body.AddRange(EncodeCString(p.SourceAddr, 65));
-        body.Add((byte)p.DestAddrTon);
-        body.Add((byte)p.DestAddrNpi);
-        body.AddRange(EncodeCString(p.DestinationAddr, 65));
-        body.Add(p.EsmClass);
-        body.Add(p.ProtocolId);
-        body.Add(p.PriorityFlag);
-        body.AddRange(EncodeCString(p.ScheduleDeliveryTime, 17));
-        body.AddRange(EncodeCString(p.ValidityPeriod, 17));
-        body.Add((byte)p.RegisteredDelivery);
-        body.Add((byte)p.ReplaceIfPresent);
-        body.Add((byte)p.DataCoding);
-        body.Add(p.DefaultMsgId);
-        body.Add(p.ShortMessageLength);
-        body.AddRange(p.ShortMessage);
-        return body.ToArray();
+        var offset = 0;
+        offset += EncodeCString(p.ServiceType, 6, buffer[offset..]);
+        buffer[offset++] = (byte)p.SourceAddrTon;
+        buffer[offset++] = (byte)p.SourceAddrNpi;
+        offset += EncodeCString(p.SourceAddr, 65, buffer[offset..]);
+        buffer[offset++] = (byte)p.DestAddrTon;
+        buffer[offset++] = (byte)p.DestAddrNpi;
+        offset += EncodeCString(p.DestinationAddr, 65, buffer[offset..]);
+        buffer[offset++] = p.EsmClass;
+        buffer[offset++] = p.ProtocolId;
+        buffer[offset++] = p.PriorityFlag;
+        offset += EncodeCString(p.ScheduleDeliveryTime, 17, buffer[offset..]);
+        offset += EncodeCString(p.ValidityPeriod, 17, buffer[offset..]);
+        buffer[offset++] = (byte)p.RegisteredDelivery;
+        buffer[offset++] = (byte)p.ReplaceIfPresent;
+        buffer[offset++] = (byte)p.DataCoding;
+        buffer[offset++] = p.DefaultMsgId;
+        buffer[offset++] = p.ShortMessageLength;
+        p.ShortMessage.CopyTo(buffer[offset..]);
+        offset += p.ShortMessage.Length;
+        return offset;
     }
 
-    private byte[] EncodeDeliverSmResp(DeliverSmRespPdu p)
+    private int EncodeDeliverSmResp(DeliverSmRespPdu p, Span<byte> buffer)
     {
-        return EncodeCString(p.MessageId, 65).ToArray();
+        return EncodeCString(p.MessageId, 65, buffer);
     }
 
     public Pdu Decode(byte[] data)
@@ -132,16 +151,13 @@ public class PduCodec
         if (data.Length < HeaderLength)
             throw new ArgumentException($"Data too short: {data.Length} bytes");
 
-        using var ms = new MemoryStream(data);
-        using var reader = new BinaryReader(ms);
-
-        var commandLength = reader.ReadUInt32();
-        var commandId = (CommandId)reader.ReadUInt32();
-        var status = (CommandStatus)reader.ReadUInt32();
-        var sequenceNumber = reader.ReadUInt32();
+        var commandLength = BitConverter.ToUInt32(data, 0);
+        var commandId = (CommandId)BitConverter.ToUInt32(data, 4);
+        var status = (CommandStatus)BitConverter.ToUInt32(data, 8);
+        var sequenceNumber = BitConverter.ToUInt32(data, 12);
 
         var bodyLength = (int)commandLength - HeaderLength;
-        var body = reader.ReadBytes(bodyLength);
+        var body = bodyLength > 0 ? data.AsSpan(HeaderLength, bodyLength) : Span<byte>.Empty;
 
         var pdu = Pdu.Create(commandId);
         pdu.SequenceNumber = sequenceNumber;
@@ -153,7 +169,7 @@ public class PduCodec
         return pdu;
     }
 
-    private void DecodeBody(Pdu pdu, byte[] body)
+    private void DecodeBody(Pdu pdu, Span<byte> body)
     {
         var pos = 0;
 
@@ -196,7 +212,7 @@ public class PduCodec
                 if (sp.ShortMessageLength > 0)
                 {
                     sp.ShortMessage = new byte[sp.ShortMessageLength];
-                    Buffer.BlockCopy(body, pos, sp.ShortMessage, 0, sp.ShortMessageLength);
+                    body.Slice(pos, sp.ShortMessageLength).CopyTo(sp.ShortMessage);
                 }
                 break;
 
@@ -225,7 +241,7 @@ public class PduCodec
                 if (dp.ShortMessageLength > 0)
                 {
                     dp.ShortMessage = new byte[dp.ShortMessageLength];
-                    Buffer.BlockCopy(body, pos, dp.ShortMessage, 0, dp.ShortMessageLength);
+                    body.Slice(pos, dp.ShortMessageLength).CopyTo(dp.ShortMessage);
                 }
                 break;
 
@@ -235,7 +251,7 @@ public class PduCodec
         }
     }
 
-    private void DecodeTlvs(Pdu pdu, byte[] body, int bodyLength)
+    private void DecodeTlvs(Pdu pdu, Span<byte> body, int bodyLength)
     {
         var fixedPartLength = GetFixedPartLength(pdu);
         if (body.Length <= fixedPartLength)
@@ -252,7 +268,7 @@ public class PduCodec
                 break;
 
             var value = new byte[len];
-            Buffer.BlockCopy(body, pos, value, 0, len);
+            body.Slice(pos, len).CopyTo(value);
             pos += len;
 
             pdu.OptionalParameters.Add(new Tlv(tag, value));
@@ -271,27 +287,30 @@ public class PduCodec
         };
     }
 
-    private byte[] EncodeCString(string? value, int maxLength)
+    private int EncodeCString(string? value, int maxLength, Span<byte> buffer)
     {
-        var bytes = new byte[maxLength];
+        if (buffer.Length < maxLength)
+            throw new ArgumentException($"Buffer too small for C-String, need {maxLength}");
+
+        buffer.Clear();
         if (!string.IsNullOrEmpty(value))
         {
             var encoding = Encoding.ASCII;
             var encoded = encoding.GetBytes(value);
             var copyLength = Math.Min(encoded.Length, maxLength - 1);
-            Buffer.BlockCopy(encoded, 0, bytes, 0, copyLength);
+            encoded.AsSpan(0, copyLength).CopyTo(buffer);
         }
-        return bytes;
+        return maxLength;
     }
 
-    private (string Value, int Pos) ReadCString(byte[] data, int pos, int maxLength)
+    private (string Value, int Pos) ReadCString(Span<byte> data, int pos, int maxLength)
     {
         var endPos = pos;
         while (endPos < data.Length && endPos < pos + maxLength && data[endPos] != 0)
             endPos++;
 
         var length = endPos - pos;
-        var value = length > 0 ? Encoding.ASCII.GetString(data, pos, length) : string.Empty;
+        var value = length > 0 ? Encoding.ASCII.GetString(data.Slice(pos, length)) : string.Empty;
         return (value, Math.Min(endPos + 1, data.Length));
     }
 }

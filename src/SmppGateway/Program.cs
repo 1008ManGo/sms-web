@@ -35,6 +35,7 @@ builder.Services.AddScoped<IDlrRepository, DlrRepository>();
 builder.Services.AddScoped<IPriceRepository, PriceRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<IAlertRepository, AlertRepository>();
 builder.Services.AddScoped<IPermissionRepository, PermissionRepository>();
 builder.Services.AddScoped<IUserService, DbUserService>();
 builder.Services.AddScoped<IBillingService, BillingService>();
@@ -49,6 +50,9 @@ builder.Services.AddSingleton<ISmppClientManager, SmppClientManager>();
 builder.Services.AddSingleton<DlrEventHandler>();
 
 builder.Services.AddSingleton<MetricsCollector>();
+
+builder.Services.AddSingleton<IConfigurationChangeNotifier, ConfigurationReloadService>();
+builder.Services.AddSingleton<DynamicConfigService>();
 
 builder.Services.AddHealthChecks()
     .AddCheck<SmppHealthCheck>("smpp_sessions", tags: new[] { "smpp" })
@@ -115,6 +119,14 @@ smppClientManager.SetAlertService(alertService);
 await smppClientManager.StartAsync();
 
 var metricsCollector = app.Services.GetRequiredService<MetricsCollector>();
+
+var configNotifier = app.Services.GetRequiredService<IConfigurationChangeNotifier>();
+configNotifier.StartWatching(configPath);
+
+var dynamicConfig = app.Services.GetRequiredService<DynamicConfigService>();
+dynamicConfig.RegisterHandler(new AccountConfigChangeHandler(
+    smppClientManager,
+    LoggerFactory.Create(b => b.AddConsole()).CreateLogger<AccountConfigChangeHandler>()));
 
 app.UseSwagger();
 app.UseSwaggerUI();

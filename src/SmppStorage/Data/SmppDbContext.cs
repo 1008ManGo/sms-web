@@ -15,6 +15,7 @@ public class SmppDbContext : DbContext
     public DbSet<PriceConfigEntity> PriceConfigs => Set<PriceConfigEntity>();
     public DbSet<DlrRecordEntity> DlrRecords => Set<DlrRecordEntity>();
     public DbSet<AuditLogEntity> AuditLogs => Set<AuditLogEntity>();
+    public DbSet<AlertEntity> Alerts => Set<AlertEntity>();
     public DbSet<UserCountryPermissionEntity> UserCountryPermissions => Set<UserCountryPermissionEntity>();
     public DbSet<UserChannelPermissionEntity> UserChannelPermissions => Set<UserChannelPermissionEntity>();
     public DbSet<UserCountryPriceEntity> UserCountryPrices => Set<UserCountryPriceEntity>();
@@ -69,6 +70,15 @@ public class SmppDbContext : DbContext
         modelBuilder.Entity<UserCountryPriceEntity>(entity =>
         {
             entity.HasIndex(e => new { e.UserId, e.CountryCode }).IsUnique();
+        });
+
+        modelBuilder.Entity<AlertEntity>(entity =>
+        {
+            entity.HasIndex(e => e.AccountId);
+            entity.HasIndex(e => e.Type);
+            entity.HasIndex(e => e.Severity);
+            entity.HasIndex(e => e.IsResolved);
+            entity.HasIndex(e => e.CreatedAt);
         });
 
         SeedData(modelBuilder);
