@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using SmppClient.Connection;
 using SmppClient.Protocol;
 using SmppClient.Queue;
 using SmppClient.Routing;
@@ -61,7 +62,7 @@ public class SubmitService : IDisposable
 
     public async Task<SubmitResult> SubmitAsync(SubmitRequest request)
     {
-        var localId = Guid.NewGuid().ToString("N")[12];
+        var localId = Guid.NewGuid().ToString("N")[..12];
 
         try
         {
@@ -143,7 +144,7 @@ public class SubmitService : IDisposable
     }
 
     private async Task<(bool Success, string MessageId, string? ErrorCode)> SendSegmentAsync(
-        Connection.Session session,
+        Session session,
         SubmitRequest request,
         LongMessageProcessor.Segment segment,
         string localId)
