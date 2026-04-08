@@ -68,7 +68,7 @@ public class AdminController : ControllerBase
             ApiKey = GenerateApiKey(request.Username),
             PasswordHash = HashPassword(request.Password),
             Balance = request.InitialBalance,
-            Status = Models.UserStatus.Active,
+            Status = (SmppStorage.Entities.UserStatus)Models.UserStatus.Active,
             CreatedAt = DateTime.UtcNow
         };
 
