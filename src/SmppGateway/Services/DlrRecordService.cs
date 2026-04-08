@@ -1,5 +1,4 @@
 using SmppClient.Services;
-using SmppStorage.Entities;
 using SmppStorage.Repositories;
 using SmppStorage.Data;
 using Microsoft.EntityFrameworkCore;
@@ -8,18 +7,18 @@ namespace SmppGateway.Services;
 
 public interface IDlrRecordService
 {
-    Task<DlrRecordEntity> CreateDlrRecordAsync(
+    Task<SmppStorage.Entities.DlrRecordEntity> CreateDlrRecordAsync(
         Guid userId,
         string messageId,
         string localId,
         string mobile,
         string content);
 
-    Task UpdateDlrStatusAsync(string messageId, Entities.DlrStatus status, DateTime dlrTime, string? errorCode = null, string? networkErrorCode = null);
+    Task UpdateDlrStatusAsync(string messageId, SmppStorage.Entities.DlrStatus status, DateTime dlrTime, string? errorCode = null, string? networkErrorCode = null);
 
-    Task<DlrRecordEntity?> GetDlrByMessageIdAsync(string messageId);
+    Task<SmppStorage.Entities.DlrRecordEntity?> GetDlrByMessageIdAsync(string messageId);
 
-    Task<DlrRecordEntity?> GetDlrByLocalIdAsync(string localId);
+    Task<SmppStorage.Entities.DlrRecordEntity?> GetDlrByLocalIdAsync(string localId);
 
     Task<int> GetPendingDlrCountAsync();
 }
@@ -35,7 +34,7 @@ public class DlrRecordService : IDlrRecordService
         _logger = logger;
     }
 
-    public async Task<DlrRecordEntity> CreateDlrRecordAsync(
+    public async Task<SmppStorage.Entities.DlrRecordEntity> CreateDlrRecordAsync(
         Guid userId,
         string messageId,
         string localId,
@@ -48,14 +47,14 @@ public class DlrRecordService : IDlrRecordService
             return existing;
         }
 
-        var dlr = new DlrRecordEntity
+        var dlr = new SmppStorage.Entities.DlrRecordEntity
         {
             Id = Guid.NewGuid(),
             MessageId = messageId,
             LocalId = localId,
             Mobile = mobile,
             Content = content,
-            Status = Entities.DlrStatus.Pending,
+            Status = SmppStorage.Entities.DlrStatus.Pending,
             SubmitTime = DateTime.UtcNow,
             UserId = userId
         };
@@ -67,7 +66,7 @@ public class DlrRecordService : IDlrRecordService
         return dlr;
     }
 
-    public async Task UpdateDlrStatusAsync(string messageId, Entities.DlrStatus status, DateTime dlrTime, string? errorCode = null, string? networkErrorCode = null)
+    public async Task UpdateDlrStatusAsync(string messageId, SmppStorage.Entities.DlrStatus status, DateTime dlrTime, string? errorCode = null, string? networkErrorCode = null)
     {
         var dlr = await _context.DlrRecords.FirstOrDefaultAsync(d => d.MessageId == messageId);
         if (dlr != null)
@@ -83,14 +82,14 @@ public class DlrRecordService : IDlrRecordService
         }
     }
 
-    public async Task<DlrRecordEntity?> GetDlrByMessageIdAsync(string messageId)
+    public async Task<SmppStorage.Entities.DlrRecordEntity?> GetDlrByMessageIdAsync(string messageId)
     {
         return await _context.DlrRecords
             .Include(d => d.User)
             .FirstOrDefaultAsync(d => d.MessageId == messageId);
     }
 
-    public async Task<DlrRecordEntity?> GetDlrByLocalIdAsync(string localId)
+    public async Task<SmppStorage.Entities.DlrRecordEntity?> GetDlrByLocalIdAsync(string localId)
     {
         return await _context.DlrRecords
             .Include(d => d.User)
@@ -99,6 +98,6 @@ public class DlrRecordService : IDlrRecordService
 
     public async Task<int> GetPendingDlrCountAsync()
     {
-        return await _context.DlrRecords.CountAsync(d => d.Status == Entities.DlrStatus.Pending);
+        return await _context.DlrRecords.CountAsync(d => d.Status == SmppStorage.Entities.DlrStatus.Pending);
     }
 }

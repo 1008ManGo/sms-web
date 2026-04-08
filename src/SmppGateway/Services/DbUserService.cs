@@ -19,18 +19,20 @@ public class DbUserService : IUserService
         _logger = logger;
     }
 
-    public async Task<UserEntity?> ValidateApiKeyAsync(string apiKey)
+    public async Task<Models.User?> ValidateApiKeyAsync(string apiKey)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => 
+        var user = await _context.Users.FirstOrDefaultAsync(u => 
             u.ApiKey == apiKey && u.Status == UserStatus.Active);
+        return user != null ? ToModel(user) : null;
     }
 
-    public async Task<UserEntity?> GetUserByIdAsync(Guid userId)
+    public async Task<Models.User?> GetUserByIdAsync(Guid userId)
     {
-        return await _context.Users.FindAsync(userId);
+        var user = await _context.Users.FindAsync(userId);
+        return user != null ? ToModel(user) : null;
     }
 
-    public async Task<UserEntity> CreateUserAsync(string username, string password)
+    public async Task<Models.User> CreateUserAsync(string username, string password)
     {
         if (await _context.Users.AnyAsync(u => u.Username == username))
         {
@@ -52,14 +54,15 @@ public class DbUserService : IUserService
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Created user: {Username}", username);
-        return user;
+        return ToModel(user);
     }
 
-    public async Task<UserEntity?> LoginAsync(string username, string password)
+    public async Task<Models.User?> LoginAsync(string username, string password)
     {
         var passwordHash = HashPassword(password);
-        return await _context.Users.FirstOrDefaultAsync(u => 
+        var user = await _context.Users.FirstOrDefaultAsync(u => 
             u.Username == username && u.PasswordHash == passwordHash);
+        return user != null ? ToModel(user) : null;
     }
 
     public async Task UpdateBalanceAsync(Guid userId, decimal amount)
@@ -71,6 +74,21 @@ public class DbUserService : IUserService
             user.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
+    }
+
+    private static Models.User ToModel(UserEntity entity)
+    {
+        return new Models.User
+        {
+            Id = entity.Id,
+            Username = entity.Username,
+            ApiKey = entity.ApiKey,
+            PasswordHash = entity.PasswordHash,
+            Balance = entity.Balance,
+            Status = entity.Status,
+            CreatedAt = entity.CreatedAt,
+            UpdatedAt = entity.UpdatedAt
+        };
     }
 
     private static string GenerateApiKey(string username)

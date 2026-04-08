@@ -57,27 +57,27 @@ public class DlrEventHandler : IDisposable
         }
     }
 
-    private static Entities.DlrStatus MapToEntityStatus(Services.DlrStatus status)
+    private static SmppStorage.Entities.DlrStatus MapToEntityStatus(SmppClient.Services.DlrStatus status)
     {
         return status switch
         {
-            Services.DlrStatus.Delivered => Entities.DlrStatus.Delivered,
-            Services.DlrStatus.Failed => Entities.DlrStatus.Failed,
-            Services.DlrStatus.Expired => Entities.DlrStatus.Expired,
-            Services.DlrStatus.Rejected => Entities.DlrStatus.Rejected,
-            Services.DlrStatus.Unknown => Entities.DlrStatus.Unknown,
-            _ => Entities.DlrStatus.Unknown
+            SmppClient.Services.DlrStatus.Delivered => SmppStorage.Entities.DlrStatus.Delivered,
+            SmppClient.Services.DlrStatus.Failed => SmppStorage.Entities.DlrStatus.Failed,
+            SmppClient.Services.DlrStatus.Expired => SmppStorage.Entities.DlrStatus.Expired,
+            SmppClient.Services.DlrStatus.Rejected => SmppStorage.Entities.DlrStatus.Rejected,
+            SmppClient.Services.DlrStatus.Unknown => SmppStorage.Entities.DlrStatus.Unknown,
+            _ => SmppStorage.Entities.DlrStatus.Unknown
         };
     }
 
-    private static SmsStatus MapToSubmitStatus(Services.DlrStatus status)
+    private static SmsStatus MapToSubmitStatus(SmppClient.Services.DlrStatus status)
     {
         return status switch
         {
-            Services.DlrStatus.Delivered => SmsStatus.Delivered,
-            Services.DlrStatus.Failed => SmsStatus.Failed,
-            Services.DlrStatus.Expired => SmsStatus.Expired,
-            Services.DlrStatus.Rejected => SmsStatus.Failed,
+            SmppClient.Services.DlrStatus.Delivered => SmsStatus.Delivered,
+            SmppClient.Services.DlrStatus.Failed => SmsStatus.Failed,
+            SmppClient.Services.DlrStatus.Expired => SmsStatus.Expired,
+            SmppClient.Services.DlrStatus.Rejected => SmsStatus.Failed,
             _ => SmsStatus.Unknown
         };
     }

@@ -69,8 +69,6 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
 
 public interface IUserService
 {
-    Task<User?> ValidateApiKeyAsync(string apiKey);
-    Task<User?> GetUserByIdAsync(Guid userId);
+    Task<Models.User?> ValidateApiKeyAsync(string apiKey);
+    Task<Models.User?> GetUserByIdAsync(Guid userId);
 }
-
-public class User : SmppGateway.Models.User { }
