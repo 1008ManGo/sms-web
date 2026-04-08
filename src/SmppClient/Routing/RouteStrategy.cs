@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using SmppClient.Connection;
 using SmppClient.Routing;
 
 namespace SmppClient.Routing;

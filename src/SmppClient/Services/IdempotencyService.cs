@@ -87,11 +87,11 @@ public class IdempotencyService : IIdempotencyService
         }
     }
 
-    public void Set(string key, SubmitResult result, TimeSpan? expiry = null)
+    public void Set(string key, SubmitResult result, TimeSpan expiry)
     {
         try
         {
-            _store.Set(key, result, expiry ?? _defaultExpiry);
+            _store.Set(key, result, expiry);
         }
         catch (Exception ex)
         {

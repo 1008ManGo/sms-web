@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace SmppClient.Connection;
 
 public enum SessionState
@@ -12,6 +14,7 @@ public enum SessionState
 public enum SessionStateEvent
 {
     Connect,
+    ConnectSuccess,
     ConnectFailed,
     BindSuccess,
     BindFailed,
