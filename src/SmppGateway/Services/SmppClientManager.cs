@@ -4,6 +4,7 @@ using SmppClient.Queue;
 using SmppClient.Routing;
 using SmppClient.Services;
 using SmppGateway.Configuration;
+using SmppStorage.Entities;
 
 namespace SmppGateway.Services;
 

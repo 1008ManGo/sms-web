@@ -68,7 +68,7 @@ public class AdminController : ControllerBase
             ApiKey = GenerateApiKey(request.Username),
             PasswordHash = HashPassword(request.Password),
             Balance = request.InitialBalance,
-            Status = UserStatus.Active,
+            Status = Models.UserStatus.Active,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -1074,7 +1074,7 @@ public class AdminController : ControllerBase
                     continue;
                 }
 
-                user.Status = UserStatus.Active;
+                user.Status = Models.UserStatus.Active;
                 await _userRepository.UpdateAsync(user);
                 result.SuccessCount++;
                 result.SuccessItems.Add(userId.ToString());
@@ -1107,7 +1107,7 @@ public class AdminController : ControllerBase
                     continue;
                 }
 
-                user.Status = UserStatus.Suspended;
+                user.Status = Models.UserStatus.Suspended;
                 await _userRepository.UpdateAsync(user);
                 result.SuccessCount++;
                 result.SuccessItems.Add(userId.ToString());
