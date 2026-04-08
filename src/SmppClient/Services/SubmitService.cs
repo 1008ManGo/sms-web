@@ -10,9 +10,11 @@ public class SubmitRequest
     public string Mobile { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string? AccountId { get; set; }
+    public List<string>? AllowedAccountIds { get; set; }
     public int Priority { get; set; } = 5;
     public string? Ext { get; set; }
     public DataCoding? PreferredCoding { get; set; }
+    public string? IdempotencyKey { get; set; }
 }
 
 public class SubmitResult
@@ -23,6 +25,8 @@ public class SubmitResult
     public int SegmentCount { get; set; } = 1;
     public string? ErrorCode { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? IdempotencyKey { get; set; }
+    public bool IsDuplicate { get; set; }
 }
 
 public class SubmitService : IDisposable
@@ -56,11 +60,24 @@ public class SubmitService : IDisposable
 
     public async Task<SubmitResult> SubmitAsync(SubmitRequest request)
     {
-        var localId = Guid.NewGuid().ToString("N")[..12];
+        var localId = Guid.NewGuid().ToString("N")[12];
 
         try
         {
-            var session = _routeStrategy.GetSession(request.AccountId ?? "");
+            Session? session;
+            if (request.AllowedAccountIds != null && request.AllowedAccountIds.Any())
+            {
+                session = _routeStrategy.GetSession(request.AllowedAccountIds);
+            }
+            else if (!string.IsNullOrEmpty(request.AccountId))
+            {
+                session = _routeStrategy.GetSession(request.AccountId);
+            }
+            else
+            {
+                session = _routeStrategy.GetBestSession();
+            }
+
             if (session == null)
             {
                 return new SubmitResult

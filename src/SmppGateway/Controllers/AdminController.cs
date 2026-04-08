@@ -23,6 +23,7 @@ public class AdminController : ControllerBase
     private readonly IAuditLogRepository _auditLogRepository;
     private readonly ISmppClientManager _smppClientManager;
     private readonly IAlertService _alertService;
+    private readonly IWebhookNotificationService? _webhookService;
     private readonly ILogger<AdminController> _logger;
 
     public AdminController(
@@ -33,6 +34,7 @@ public class AdminController : ControllerBase
         IAuditLogRepository auditLogRepository,
         ISmppClientManager smppClientManager,
         IAlertService alertService,
+        IWebhookNotificationService? webhookService,
         ILogger<AdminController> logger)
     {
         _userRepository = userRepository;
@@ -42,6 +44,7 @@ public class AdminController : ControllerBase
         _auditLogRepository = auditLogRepository;
         _smppClientManager = smppClientManager;
         _alertService = alertService;
+        _webhookService = webhookService;
         _logger = logger;
     }
 
@@ -879,6 +882,317 @@ public class AdminController : ControllerBase
         await _alertService.ResolveAlertsByAccountAsync(accountId, request.AlertType);
         _logger.LogInformation("Admin resolved {AlertType} alerts for channel {AccountId}", request.AlertType, accountId);
         return Ok(ApiResponse.Success($"Alerts of type {request.AlertType} resolved for channel {accountId}"));
+    }
+
+    [HttpGet("webhook/config")]
+    public IActionResult GetWebhookConfig()
+    {
+        if (_webhookService == null)
+        {
+            return Ok(ApiResponse<object>.Success(new { enabled = false, url = "" }));
+        }
+
+        return Ok(ApiResponse<object>.Success(new
+        {
+            enabled = _webhookService.IsEnabled,
+            url = "configured"
+        }));
+    }
+
+    [HttpPost("webhook/config")]
+    public IActionResult ConfigureWebhook([FromBody] ConfigureWebhookRequest request)
+    {
+        if (_webhookService == null)
+        {
+            return BadRequest(ApiResponse.Fail(1, "Webhook service not available"));
+        }
+
+        _webhookService.ConfigureWebhook(request.Url, request.Headers);
+        if (request.Enabled)
+        {
+            _webhookService.EnableWebhook();
+        }
+        else
+        {
+            _webhookService.DisableWebhook();
+        }
+
+        _logger.LogInformation("Admin configured webhook: {Url}, enabled: {Enabled}", request.Url, request.Enabled);
+        return Ok(ApiResponse.Success("Webhook configured"));
+    }
+
+    [HttpPost("webhook/enable")]
+    public IActionResult EnableWebhook()
+    {
+        if (_webhookService == null)
+        {
+            return BadRequest(ApiResponse.Fail(1, "Webhook service not available"));
+        }
+
+        _webhookService.EnableWebhook();
+        _logger.LogInformation("Admin enabled webhook");
+        return Ok(ApiResponse.Success("Webhook enabled"));
+    }
+
+    [HttpPost("webhook/disable")]
+    public IActionResult DisableWebhook()
+    {
+        if (_webhookService == null)
+        {
+            return BadRequest(ApiResponse.Fail(1, "Webhook service not available"));
+        }
+
+        _webhookService.DisableWebhook();
+        _logger.LogInformation("Admin disabled webhook");
+        return Ok(ApiResponse.Success("Webhook disabled"));
+    }
+
+    [HttpPost("channels/batch/enable")]
+    public async Task<IActionResult> BatchEnableChannels([FromBody] BatchEnableChannelsRequest request)
+    {
+        var result = new BatchOperationResult();
+
+        foreach (var accountId in request.AccountIds)
+        {
+            try
+            {
+                var account = await _accountRepository.GetByAccountIdAsync(accountId);
+                if (account == null)
+                {
+                    result.FailureCount++;
+                    result.Failures.Add($"Channel {accountId} not found");
+                    continue;
+                }
+
+                account.Enabled = true;
+                await _accountRepository.UpdateAsync(account);
+                result.SuccessCount++;
+                result.SuccessItems.Add(accountId);
+            }
+            catch (Exception ex)
+            {
+                result.FailureCount++;
+                result.Failures.Add($"Channel {accountId}: {ex.Message}");
+            }
+        }
+
+        _logger.LogInformation("Admin batch enabled {Count} channels", result.SuccessCount);
+        return Ok(ApiResponse<BatchOperationResult>.Success(result));
+    }
+
+    [HttpPost("channels/batch/disable")]
+    public async Task<IActionResult> BatchDisableChannels([FromBody] BatchDisableChannelsRequest request)
+    {
+        var result = new BatchOperationResult();
+
+        foreach (var accountId in request.AccountIds)
+        {
+            try
+            {
+                var account = await _accountRepository.GetByAccountIdAsync(accountId);
+                if (account == null)
+                {
+                    result.FailureCount++;
+                    result.Failures.Add($"Channel {accountId} not found");
+                    continue;
+                }
+
+                account.Enabled = false;
+                await _accountRepository.UpdateAsync(account);
+                result.SuccessCount++;
+                result.SuccessItems.Add(accountId);
+            }
+            catch (Exception ex)
+            {
+                result.FailureCount++;
+                result.Failures.Add($"Channel {accountId}: {ex.Message}");
+            }
+        }
+
+        _logger.LogInformation("Admin batch disabled {Count} channels", result.SuccessCount);
+        return Ok(ApiResponse<BatchOperationResult>.Success(result));
+    }
+
+    [HttpPut("channels/batch/tps")]
+    public async Task<IActionResult> BatchUpdateTps([FromBody] BatchUpdateTpsRequest request)
+    {
+        var result = new BatchOperationResult();
+
+        foreach (var update in request.Updates)
+        {
+            try
+            {
+                var account = await _accountRepository.GetByAccountIdAsync(update.AccountId);
+                if (account == null)
+                {
+                    result.FailureCount++;
+                    result.Failures.Add($"Channel {update.AccountId} not found");
+                    continue;
+                }
+
+                if (update.MaxSessions.HasValue && update.MaxSessions.Value != account.MaxSessions)
+                {
+                    await _smppClientManager.UpdateAccountSessionsAsync(update.AccountId, update.MaxSessions.Value);
+                    account.MaxSessions = update.MaxSessions.Value;
+                }
+
+                if (update.MaxTps > 0 && update.MaxTps != account.MaxTps)
+                {
+                    await _smppClientManager.UpdateAccountTpsAsync(update.AccountId, update.MaxTps);
+                    account.MaxTps = update.MaxTps;
+                }
+
+                await _accountRepository.UpdateAsync(account);
+                result.SuccessCount++;
+                result.SuccessItems.Add(update.AccountId);
+            }
+            catch (Exception ex)
+            {
+                result.FailureCount++;
+                result.Failures.Add($"Channel {update.AccountId}: {ex.Message}");
+            }
+        }
+
+        _logger.LogInformation("Admin batch updated TPS for {Count} channels", result.SuccessCount);
+        return Ok(ApiResponse<BatchOperationResult>.Success(result));
+    }
+
+    [HttpPost("users/batch/enable")]
+    public async Task<IActionResult> BatchEnableUsers([FromBody] BatchEnableUsersRequest request)
+    {
+        var result = new BatchOperationResult();
+
+        foreach (var userId in request.UserIds)
+        {
+            try
+            {
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user == null)
+                {
+                    result.FailureCount++;
+                    result.Failures.Add($"User {userId} not found");
+                    continue;
+                }
+
+                user.Status = UserStatus.Active;
+                await _userRepository.UpdateAsync(user);
+                result.SuccessCount++;
+                result.SuccessItems.Add(userId.ToString());
+            }
+            catch (Exception ex)
+            {
+                result.FailureCount++;
+                result.Failures.Add($"User {userId}: {ex.Message}");
+            }
+        }
+
+        _logger.LogInformation("Admin batch enabled {Count} users", result.SuccessCount);
+        return Ok(ApiResponse<BatchOperationResult>.Success(result));
+    }
+
+    [HttpPost("users/batch/disable")]
+    public async Task<IActionResult> BatchDisableUsers([FromBody] BatchDisableUsersRequest request)
+    {
+        var result = new BatchOperationResult();
+
+        foreach (var userId in request.UserIds)
+        {
+            try
+            {
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user == null)
+                {
+                    result.FailureCount++;
+                    result.Failures.Add($"User {userId} not found");
+                    continue;
+                }
+
+                user.Status = UserStatus.Suspended;
+                await _userRepository.UpdateAsync(user);
+                result.SuccessCount++;
+                result.SuccessItems.Add(userId.ToString());
+            }
+            catch (Exception ex)
+            {
+                result.FailureCount++;
+                result.Failures.Add($"User {userId}: {ex.Message}");
+            }
+        }
+
+        _logger.LogInformation("Admin batch disabled {Count} users", result.SuccessCount);
+        return Ok(ApiResponse<BatchOperationResult>.Success(result));
+    }
+
+    [HttpPost("users/batch/countries")]
+    public async Task<IActionResult> BatchAssignCountries([FromBody] BatchAssignCountriesRequest request)
+    {
+        var result = new BatchOperationResult();
+
+        foreach (var userId in request.UserIds)
+        {
+            try
+            {
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user == null)
+                {
+                    result.FailureCount++;
+                    result.Failures.Add($"User {userId} not found");
+                    continue;
+                }
+
+                foreach (var countryCode in request.CountryCodes)
+                {
+                    await _permissionRepository.AddCountryPermissionAsync(userId, countryCode);
+                }
+
+                result.SuccessCount++;
+                result.SuccessItems.Add($"{userId}: {string.Join(",", request.CountryCodes)}");
+            }
+            catch (Exception ex)
+            {
+                result.FailureCount++;
+                result.Failures.Add($"User {userId}: {ex.Message}");
+            }
+        }
+
+        _logger.LogInformation("Admin batch assigned countries to {Count} users", result.SuccessCount);
+        return Ok(ApiResponse<BatchOperationResult>.Success(result));
+    }
+
+    [HttpPost("users/batch/channels")]
+    public async Task<IActionResult> BatchAssignChannels([FromBody] BatchAssignChannelsRequest request)
+    {
+        var result = new BatchOperationResult();
+
+        foreach (var userId in request.UserIds)
+        {
+            try
+            {
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user == null)
+                {
+                    result.FailureCount++;
+                    result.Failures.Add($"User {userId} not found");
+                    continue;
+                }
+
+                foreach (var channel in request.Channels)
+                {
+                    await _permissionRepository.AddChannelPermissionAsync(userId, channel.AccountId, channel.MaxTps);
+                }
+
+                result.SuccessCount++;
+                result.SuccessItems.Add($"{userId}: {string.Join(",", request.Channels.Select(c => c.AccountId))}");
+            }
+            catch (Exception ex)
+            {
+                result.FailureCount++;
+                result.Failures.Add($"User {userId}: {ex.Message}");
+            }
+        }
+
+        _logger.LogInformation("Admin batch assigned channels to {Count} users", result.SuccessCount);
+        return Ok(ApiResponse<BatchOperationResult>.Success(result));
     }
 }
 

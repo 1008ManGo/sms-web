@@ -65,3 +65,62 @@ public class RechargeRequest
     public decimal Amount { get; set; }
     public string? Description { get; set; }
 }
+
+public class BatchEnableChannelsRequest
+{
+    public List<string> AccountIds { get; set; } = new();
+}
+
+public class BatchDisableChannelsRequest
+{
+    public List<string> AccountIds { get; set; } = new();
+}
+
+public class BatchUpdateTpsRequest
+{
+    public List<ChannelTpsUpdate> Updates { get; set; } = new();
+}
+
+public class ChannelTpsUpdate
+{
+    public string AccountId { get; set; } = string.Empty;
+    public int MaxTps { get; set; }
+    public int? MaxSessions { get; set; }
+}
+
+public class BatchEnableUsersRequest
+{
+    public List<Guid> UserIds { get; set; } = new();
+}
+
+public class BatchDisableUsersRequest
+{
+    public List<Guid> UserIds { get; set; } = new();
+}
+
+public class BatchAssignCountriesRequest
+{
+    public List<Guid> UserIds { get; set; } = new();
+    public List<string> CountryCodes { get; set; } = new();
+}
+
+public class BatchAssignChannelsRequest
+{
+    public List<Guid> UserIds { get; set; } = new();
+    public List<ChannelAssignment> Channels { get; set; } = new();
+}
+
+public class BatchOperationResult
+{
+    public int SuccessCount { get; set; }
+    public int FailureCount { get; set; }
+    public List<string> Failures { get; set; } = new();
+    public List<string> SuccessItems { get; set; } = new();
+}
+
+public class ConfigureWebhookRequest
+{
+    public string Url { get; set; } = string.Empty;
+    public Dictionary<string, string> Headers { get; set; } = new();
+    public bool Enabled { get; set; } = true;
+}

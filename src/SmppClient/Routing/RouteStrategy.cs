@@ -100,6 +100,54 @@ public class RouteStrategy
         return null;
     }
 
+    public Session? GetSession(IEnumerable<string>? allowedAccountIds = null)
+    {
+        if (allowedAccountIds != null && allowedAccountIds.Any())
+        {
+            return GetCrossAccountSession(allowedAccountIds);
+        }
+        return GetBestSession();
+    }
+
+    public Session? GetCrossAccountSession(IEnumerable<string> allowedAccountIds)
+    {
+        var accountIdList = allowedAccountIds.ToList();
+        lock (_lock)
+        {
+            var candidatePools = _pools
+                .Where(kvp => accountIdList.Contains(kvp.Key) && kvp.Value.SessionCount > 0)
+                .ToList();
+
+            if (candidatePools.Count == 0)
+                return null;
+
+            SessionPool? bestPool = null;
+            var bestScore = -1.0;
+
+            foreach (var kvp in candidatePools)
+            {
+                var pool = kvp.Value;
+                var score = CalculatePoolScore(pool);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestPool = pool;
+                }
+            }
+
+            if (bestPool == null) return null;
+
+            return _strategyType switch
+            {
+                RouteStrategyType.Weight => bestPool.GetAvailable(),
+                RouteStrategyType.Priority => bestPool.GetAvailable(),
+                RouteStrategyType.LeastLoaded => bestPool.GetLeastLoaded(),
+                RouteStrategyType.RoundRobin => GetRoundRobinSession(bestPool.AccountId, bestPool),
+                _ => bestPool.GetAvailable()
+            };
+        }
+    }
+
     private Session? GetRoundRobinSession(string accountId, SessionPool pool)
     {
         if (_roundRobinCounters.TryGetValue(accountId, out var counter))
@@ -186,6 +234,22 @@ public class RouteStrategy
                 .Where(kvp => kvp.Value.SessionCount > 0)
                 .Select(kvp => kvp.Key)
                 .ToList();
+        }
+    }
+
+    public IEnumerable<string> GetAvailableAccounts(IEnumerable<string>? allowedAccountIds = null)
+    {
+        lock (_lock)
+        {
+            var query = _pools.Where(kvp => kvp.Value.SessionCount > 0);
+
+            if (allowedAccountIds != null)
+            {
+                var allowed = allowedAccountIds.ToHashSet();
+                query = query.Where(kvp => allowed.Contains(kvp.Key));
+            }
+
+            return query.Select(kvp => kvp.Key).ToList();
         }
     }
 

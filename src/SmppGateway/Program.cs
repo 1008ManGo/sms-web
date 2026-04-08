@@ -44,6 +44,7 @@ builder.Services.AddScoped<ISubmitRecordService, SubmitRecordService>();
 builder.Services.AddScoped<IDlrRecordService, DlrRecordService>();
 
 builder.Services.AddScoped<IAlertService, AlertService>();
+builder.Services.AddSingleton<IWebhookNotificationService, WebhookNotificationService>();
 
 builder.Services.AddSingleton<ISmppClientManager, SmppClientManager>();
 
