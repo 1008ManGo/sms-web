@@ -3,10 +3,10 @@
   "Port": 8080,
   "AdminApiKey": "admin-a1b2c3d4e5f678901234567890123456",
   "Database": {
-    "Host": "localhost",
+    "Host": "postgres",
     "Port": 5432,
     "Username": "postgres",
-    "Password": "postgres",
+    "Password": "postgres123",
     "Database": "smpp_gateway"
   },
   "RabbitMq": {
@@ -18,7 +18,7 @@
   "Accounts": [
     {
       "Id": "account-1",
-      "Name": "运营商1",
+      "Name": "默认通道",
       "Host": "127.0.0.1",
       "Port": 2775,
       "SystemId": "smppclient",
